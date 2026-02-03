@@ -1,0 +1,186 @@
+Subject: [PATCH] 7_config_server_1_HWD
+---
+Index: docker/docker-compose.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker/docker-compose.yml b/docker/docker-compose.yml
+--- a/docker/docker-compose.yml	(revision 81b5cf520ca67d5a63bdf7adf4cbff33ade45a09)
++++ b/docker/docker-compose.yml	(date 1728226266834)
+@@ -1,17 +1,39 @@
+ version: "3.8"
+ services:
++  config-server:
++    image: "config-server"
++    container_name: "config-server"
++    environment:
++      - THC_PATH=/actuator/health
++      - THC_PORT=9095
++    ports:
++      - "9095:9095"
++    healthcheck:
++      test: [ "CMD", "/cnb/process/health-check" ]
++      interval: 15s
++      timeout: 5s
++      retries: 5
++      start_period: 20s
++
+   orders-service:
+     image: "orders-service"
+     container_name: "orders-service"
+     depends_on:
+       postgres-orders:
+         condition: service_healthy
++      config-server:
++        condition: service_healthy
+     ports:
+       - "9092:9092"
+     environment:
+-      - SPRING_R2DBC_URL=r2dbc:postgresql://postgres-orders:5432/orders_service_db
+-      - SPRING_FLYWAY_URL=jdbc:postgresql://postgres-orders:5432/orders_service_db
+-      - EXTERNAL_MENU_SERVICE_URL=http://menu-service:9091
++      - CONFIGSERVER_IMPORT=configserver:${CONFIG_SERVER_URL}
++      - SPRING_CLOUD_CONFIG_FAIL_FAST=true
++      - SPRING_PROFILES_ACTIVE=prod
++      - DB_USER=${ORDERS_DB_USER}
++      - DB_PASSWORD=${ORDERS_DB_PASSWORD}
++      - DB_URL=${ORDERS_DB_URL}
++      - FLYWAY_DB_URL=${ORDERS_DB_FLYWAY_URL}
++      - MENU_SERVICE_URL=${MENU_SERVICE_URL}
+ 
+   menu-service:
+     image: "menu-service"
+@@ -19,10 +41,17 @@
+     depends_on:
+       postgres-menus:
+         condition: service_healthy
++      config-server:
++        condition: service_healthy
+     ports:
+       - "9091:9091"
+     environment:
+-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-menus:5431/menu_service_db
++      - CONFIGSERVER_IMPORT=configserver:${CONFIG_SERVER_URL}
++      - SPRING_CLOUD_CONFIG_FAIL_FAST=true
++      - SPRING_PROFILES_ACTIVE=prod
++      - DB_USER=${MENU_DB_USER}
++      - DB_PASSWORD=${MENU_DB_PASSWORD}
++      - DB_URL=${MENU_DB_URL}
+ 
+   postgres-menus:
+     image: "postgres:16.1"
+@@ -30,8 +59,8 @@
+     ports:
+       - "5431:5431"
+     environment:
+-      - POSTGRES_USER=user
+-      - POSTGRES_PASSWORD=password
++      - POSTGRES_USER=${MENU_DB_USER}
++      - POSTGRES_PASSWORD=${MENU_DB_PASSWORD}
+       - POSTGRES_DB=menu_service_db
+       - PGPORT=5431
+     volumes:
+@@ -49,8 +78,8 @@
+     ports:
+       - "15432:5432"
+     environment:
+-      - POSTGRES_USER=user
+-      - POSTGRES_PASSWORD=password
++      - POSTGRES_USER=${ORDERS_DB_USER}
++      - POSTGRES_PASSWORD=${ORDERS_DB_PASSWORD}
+       - POSTGRES_DB=orders_service_db
+     volumes:
+       - db-orders:/var/lib/postgresql/data
+Index: build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build.gradle b/build.gradle
+--- a/build.gradle	(revision 81b5cf520ca67d5a63bdf7adf4cbff33ade45a09)
++++ b/build.gradle	(date 1728199744744)
+@@ -28,6 +28,7 @@
+ ext {
+     wiremockVersion = '3.2.0'
+     springdocVersion = '2.5.0'
++    springCloudVersion = '2023.0.1'
+ }
+ 
+ dependencies {
+@@ -37,6 +38,8 @@
+     implementation 'org.springframework.boot:spring-boot-starter-webflux'
+     implementation "org.springdoc:springdoc-openapi-starter-webflux-ui:${springdocVersion}"
+     implementation 'org.postgresql:r2dbc-postgresql'
++    implementation 'org.springframework.cloud:spring-cloud-starter-config'
++    implementation 'org.springframework.retry:spring-retry'
+     compileOnly 'org.projectlombok:lombok'
+     runtimeOnly 'org.flywaydb:flyway-core'
+     runtimeOnly 'org.postgresql:postgresql'
+@@ -53,6 +56,12 @@
+     testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
+ }
+ 
++dependencyManagement {
++    imports {
++        mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
++    }
++}
++
+ bootBuildImage {
+     imageName = "${project.name}"
+     environment = ["BP_JVM_VERSION": "17.*"]
+Index: src/main/resources/application.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+--- a/src/main/resources/application.yml	(revision 81b5cf520ca67d5a63bdf7adf4cbff33ade45a09)
++++ b/src/main/resources/application.yml	(date 1728199744745)
+@@ -27,6 +27,23 @@
+     user: ${spring.r2dbc.username}
+     password: ${spring.r2dbc.password}
+     url: jdbc:postgresql://localhost:15432/orders_service_db
++  config:
++    import: ${configserver.import}
++  cloud:
++    config:
++      import-check:
++        enabled: false
++      request-connect-timeout: 5000
++      request-read-timeout: 5000
++      fail-fast: false
++      retry:
++        max-attempts: 6
++        initial-interval: 1000
++        max-interval: 2000
++        multiplier: 1.1
++
++configserver:
++  import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:9095}
+ 
+ external:
+   # url для связи с Menu Service
+Index: docker/.env
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker/.env b/docker/.env
+new file mode 100644
+--- /dev/null	(date 1728199744744)
++++ b/docker/.env	(date 1728199744744)
+@@ -0,0 +1,11 @@
++CONFIG_SERVER_URL=http://config-server:9095
++
++MENU_DB_USER=user
++MENU_DB_PASSWORD=password
++MENU_DB_URL=jdbc:postgresql://postgres-menus:5431/menu_service_db
++
++ORDERS_DB_USER=user
++ORDERS_DB_PASSWORD=password
++ORDERS_DB_URL=r2dbc:postgresql://postgres-orders:5432/orders_service_db
++ORDERS_DB_FLYWAY_URL=jdbc:postgresql://postgres-orders:5432/orders_service_db
++MENU_SERVICE_URL=http://menu-service:9091
+\ No newline at end of file

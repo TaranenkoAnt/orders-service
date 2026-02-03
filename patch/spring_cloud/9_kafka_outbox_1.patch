@@ -1,0 +1,232 @@
+Subject: [PATCH] 9_kafka_outbox_1
+---
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/mapper/OrderOutboxMapper.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/mapper/OrderOutboxMapper.java b/src/main/java/ru/javaops/cloudjava/ordersservice/mapper/OrderOutboxMapper.java
+new file mode 100644
+--- /dev/null	(date 1729198765806)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/mapper/OrderOutboxMapper.java	(date 1729198765806)
+@@ -0,0 +1,21 @@
++package ru.javaops.cloudjava.ordersservice.mapper;
++
++import org.springframework.stereotype.Component;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuOrder;
++import ru.javaops.cloudjava.ordersservice.storage.model.OrderPlacedEvent;
++
++@Component
++public class OrderOutboxMapper {
++
++    public OrderPlacedEvent toOrderOutbox(MenuOrder order) {
++        return OrderPlacedEvent.builder()
++                .orderId(order.getId())
++                .createdBy(order.getCreatedBy())
++                .city(order.getCity())
++                .street(order.getStreet())
++                .house(order.getApartment())
++                .apartment(order.getApartment())
++                .createdAt(order.getCreatedAt())
++                .build();
++    }
++}
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImpl.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImpl.java b/src/main/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImpl.java
+--- a/src/main/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImpl.java	(revision 01a4eca79c758d8509b72fbb8c9ed23470c18a8a)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImpl.java	(date 1729251643746)
+@@ -1,8 +1,11 @@
+ package ru.javaops.cloudjava.ordersservice.service.impl;
+ 
+ import lombok.RequiredArgsConstructor;
++import lombok.extern.slf4j.Slf4j;
+ import org.springframework.data.domain.PageRequest;
++import org.springframework.http.HttpStatus;
+ import org.springframework.stereotype.Service;
++import org.springframework.transaction.annotation.Transactional;
+ import reactor.core.publisher.Flux;
+ import reactor.core.publisher.Mono;
+ import ru.javaops.cloudjava.ordersservice.client.MenuClient;
+@@ -10,18 +13,25 @@
+ import ru.javaops.cloudjava.ordersservice.dto.GetMenuInfoRequest;
+ import ru.javaops.cloudjava.ordersservice.dto.OrderResponse;
+ import ru.javaops.cloudjava.ordersservice.dto.SortBy;
++import ru.javaops.cloudjava.ordersservice.exception.OrderServiceException;
+ import ru.javaops.cloudjava.ordersservice.mapper.OrderMapper;
++import ru.javaops.cloudjava.ordersservice.mapper.OrderOutboxMapper;
+ import ru.javaops.cloudjava.ordersservice.service.MenuOrderService;
+ import ru.javaops.cloudjava.ordersservice.storage.repositories.MenuOrderRepository;
++import ru.javaops.cloudjava.ordersservice.storage.repositories.OrderPlacedEventRepository;
+ 
+ @Service
++@Slf4j
+ @RequiredArgsConstructor
+ public class MenuOrderServiceImpl implements MenuOrderService {
+ 
+     private final MenuOrderRepository repository;
+     private final MenuClient menuClient;
+     private final OrderMapper orderMapper;
++    private final OrderOutboxMapper orderOutboxMapper;
++    private final OrderPlacedEventRepository orderPlacedEventRepository;
+ 
++    @Transactional
+     @Override
+     public Mono<OrderResponse> createOrder(CreateOrderRequest request, String username) {
+         var getInfoRequest = new GetMenuInfoRequest(request.getNameToQuantity().keySet());
+@@ -29,7 +39,13 @@
+                 .getMenuInfo(getInfoRequest)
+                 .map(response -> orderMapper.mapToOrder(request, username, response))
+                 .flatMap(repository::save)
+-                .map(orderMapper::mapToResponse);
++                .zipWhen(menuOrder -> {
++                    var outbox = orderOutboxMapper.toOrderOutbox(menuOrder);
++                    return orderPlacedEventRepository.save(outbox);
++                })
++                .map(tuple -> orderMapper.mapToResponse(tuple.getT1()))
++                .doOnError(e -> log.error("Error saving MenuOrder: {}", e.getMessage()))
++                .onErrorMap(this::handleThrowable);
+     }
+ 
+     @Override
+@@ -39,4 +55,9 @@
+         return repository.findAllByCreatedBy(username, pageRequest)
+                 .map(orderMapper::mapToResponse);
+     }
++
++    private Throwable handleThrowable(Throwable t) {
++        return (t instanceof OrderServiceException) ? t :
++                new OrderServiceException(t.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
++    }
+ }
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java	(revision 01a4eca79c758d8509b72fbb8c9ed23470c18a8a)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java	(date 1729198795798)
+@@ -21,7 +21,8 @@
+             .withReuse(true)
+             .withDatabaseName("test_database")
+             .withUsername("user")
+-            .withPassword("password");
++            .withPassword("password")
++            .withCommand("-c wal_level=logical -c max_wal_senders=1 -c max_replication_slots=1");
+ 
+     static {
+         container.start();
+Index: src/main/resources/db/migration/V2__outbox_schema.sql
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/db/migration/V2__outbox_schema.sql b/src/main/resources/db/migration/V2__outbox_schema.sql
+new file mode 100644
+--- /dev/null	(date 1729198795790)
++++ b/src/main/resources/db/migration/V2__outbox_schema.sql	(date 1729198795790)
+@@ -0,0 +1,16 @@
++CREATE TABLE IF NOT EXISTS orders_outbox(
++    order_id BIGINT PRIMARY KEY,
++    created_by TEXT NOT NULL,
++    city TEXT NOT NULL,
++    street TEXT NOT NULL,
++    house INTEGER NOT NULL,
++    apartment INTEGER NOT NULL,
++    created_at TIMESTAMP NOT NULL
++);
++
++CREATE TABLE IF NOT EXISTS heartbeat_table(
++    id INTEGER PRIMARY KEY,
++    updated_at TIMESTAMP NOT NULL
++);
++
++CREATE PUBLICATION orders_outbox_publication FOR TABLE orders_outbox, heartbeat_table;
+\ No newline at end of file
+Index: src/main/resources/db/migration/V3__outbox_replication_slot.sql
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/db/migration/V3__outbox_replication_slot.sql b/src/main/resources/db/migration/V3__outbox_replication_slot.sql
+new file mode 100644
+--- /dev/null	(date 1729198795794)
++++ b/src/main/resources/db/migration/V3__outbox_replication_slot.sql	(date 1729198795794)
+@@ -0,0 +1,1 @@
++SELECT pg_create_logical_replication_slot('postgres_debezium', 'pgoutput');
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderPlacedEvent.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderPlacedEvent.java b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderPlacedEvent.java
+new file mode 100644
+--- /dev/null	(date 1729198795780)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderPlacedEvent.java	(date 1729198795780)
+@@ -0,0 +1,41 @@
++package ru.javaops.cloudjava.ordersservice.storage.model;
++
++import lombok.AllArgsConstructor;
++import lombok.Builder;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++import org.springframework.data.annotation.Id;
++import org.springframework.data.domain.Persistable;
++import org.springframework.data.relational.core.mapping.Column;
++import org.springframework.data.relational.core.mapping.Table;
++
++import java.time.LocalDateTime;
++
++@AllArgsConstructor
++@NoArgsConstructor
++@Data
++@Builder
++@Table("orders_outbox")
++public class OrderPlacedEvent implements Persistable<Long> {
++    @Id
++    @Column("order_id")
++    private Long orderId;
++    @Column("created_by")
++    private String createdBy;
++    private String city;
++    private String street;
++    private int house;
++    private int apartment;
++    @Column("created_at")
++    private LocalDateTime createdAt;
++
++    @Override
++    public Long getId() {
++        return orderId;
++    }
++
++    @Override
++    public boolean isNew() {
++        return true;
++    }
++}
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/storage/repositories/OrderPlacedEventRepository.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/repositories/OrderPlacedEventRepository.java b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/repositories/OrderPlacedEventRepository.java
+new file mode 100644
+--- /dev/null	(date 1729198795786)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/repositories/OrderPlacedEventRepository.java	(date 1729198795786)
+@@ -0,0 +1,7 @@
++package ru.javaops.cloudjava.ordersservice.storage.repositories;
++
++import org.springframework.data.repository.reactive.ReactiveCrudRepository;
++import ru.javaops.cloudjava.ordersservice.storage.model.OrderPlacedEvent;
++
++public interface OrderPlacedEventRepository extends ReactiveCrudRepository<OrderPlacedEvent, Long> {
++}
+\ No newline at end of file
