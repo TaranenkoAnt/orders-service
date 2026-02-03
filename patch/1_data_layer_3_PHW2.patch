@@ -1,0 +1,188 @@
+Subject: [PATCH] 1_data_layer_3_PHW2
+---
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestConstants.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestConstants.java b/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestConstants.java
+new file mode 100644
+--- /dev/null	(date 1726493280412)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestConstants.java	(date 1726493280412)
+@@ -0,0 +1,36 @@
++package ru.javaops.cloudjava.ordersservice.testdata;
++
++import java.math.BigDecimal;
++import java.time.LocalDateTime;
++import java.time.Month;
++
++public class TestConstants {
++
++    public static final String BASE_URL = "/v1/menu-orders";
++    public static final String MENU_INFO_PATH = "/v1/menu-items/menu-info";
++
++    public static final String CITY_ONE = "CityOne";
++    public static final String STREET_ONE = "StreetOne";
++    public static final int HOUSE_ONE = 1;
++    public static final int APARTMENT_ONE = 1;
++    public static final String MENU_ONE = "One";
++    public static final String MENU_TWO = "Two";
++    public static final String MENU_THREE = "Three";
++    public static final int MENU_ONE_QUANTITY = 10;
++    public static final int MENU_TWO_QUANTITY = 5;
++    public static final int MENU_THREE_QUANTITY = 5;
++    public static final BigDecimal MENU_ONE_PRICE = BigDecimal.valueOf(4);
++    public static final BigDecimal MENU_TWO_PRICE = BigDecimal.valueOf(3);
++    public static final BigDecimal MENU_THREE_PRICE = BigDecimal.valueOf(3);
++    public static final int MENU_CREATE_ONE_QUANTITY = 10;
++    public static final int MENU_CREATE_TWO_QUANTITY = 20;
++    public static final int MENU_CREATE_THREE_QUANTITY = 30;
++    public static final String USERNAME_ONE = "username1";
++    public static final BigDecimal SUCCESS_TOTAL_PRICE = BigDecimal.valueOf(1414.0);
++    public static final BigDecimal MENU_CREATE_ONE_PRICE = BigDecimal.valueOf(10.1);
++    public static final BigDecimal MENU_CREATE_TWO_PRICE = BigDecimal.valueOf(20.2);
++    public static final BigDecimal MENU_CREATE_THREE_PRICE = BigDecimal.valueOf(30.3);
++    public static final LocalDateTime ORDER_ONE_DATE = LocalDateTime.of(2024, Month.FEBRUARY, 18, 10, 23, 54);
++    public static final LocalDateTime ORDER_TWO_DATE = LocalDateTime.of(2024, Month.FEBRUARY, 20, 10, 23, 54);
++    public static final LocalDateTime ORDER_THREE_DATE = LocalDateTime.of(2024, Month.FEBRUARY, 22, 10, 23, 54);
++}
+\ No newline at end of file
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java
+new file mode 100644
+--- /dev/null	(date 1726493254405)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java	(date 1726493254405)
+@@ -0,0 +1,99 @@
++package ru.javaops.cloudjava.ordersservice.storage.repositories;
++
++import io.r2dbc.spi.ConnectionFactory;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.beans.factory.annotation.Value;
++import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
++import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
++import org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTest;
++import org.springframework.context.annotation.Import;
++import org.springframework.core.io.Resource;
++import org.springframework.data.domain.PageRequest;
++import org.springframework.data.domain.Sort;
++import org.springframework.r2dbc.connection.init.ResourceDatabasePopulator;
++import org.springframework.test.context.DynamicPropertyRegistry;
++import org.springframework.test.context.DynamicPropertySource;
++import org.testcontainers.containers.PostgreSQLContainer;
++import org.testcontainers.junit.jupiter.Container;
++import org.testcontainers.junit.jupiter.Testcontainers;
++import org.testcontainers.utility.DockerImageName;
++import reactor.core.publisher.Flux;
++import reactor.test.StepVerifier;
++import ru.javaops.cloudjava.ordersservice.config.R2dbcConfig;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuOrder;
++
++import static ru.javaops.cloudjava.ordersservice.testdata.TestConstants.*;
++
++@Import({R2dbcConfig.class})
++@ImportAutoConfiguration({JacksonAutoConfiguration.class})
++@DataR2dbcTest
++@Testcontainers
++public class MenuOrderRepositoryTest {
++
++    @Autowired
++    private MenuOrderRepository repository;
++    @Autowired
++    private ConnectionFactory connectionFactory;
++    @Container
++    static PostgreSQLContainer<?> container = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16.1"));
++
++    @DynamicPropertySource
++    static void applyProperties(DynamicPropertyRegistry registry) {
++        var url = "r2dbc:postgresql://" +
++                container.getHost() + ":" +
++                container.getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT) + "/" +
++                container.getDatabaseName();
++
++        registry.add("spring.r2dbc.url", () -> url);
++        registry.add("spring.r2dbc.username", container::getUsername);
++        registry.add("spring.r2dbc.password", container::getPassword);
++        registry.add("spring.flyway.url", container::getJdbcUrl);
++        registry.add("spring.flyway.user", container::getUsername);
++        registry.add("spring.flyway.password", container::getPassword);
++    }
++
++    @BeforeEach
++    void populateDb(@Value("classpath:insert-orders.sql") Resource script) {
++        executeScriptBlocking(script);
++    }
++
++    @AfterEach
++    void clearDb(@Value("classpath:delete-orders.sql") Resource script) {
++        executeScriptBlocking(script);
++    }
++
++    @Test
++    void findAllByCreatedBy_returnsCorrectSortedByDateAsc() {
++        var pageRequest = PageRequest.of(0, 2)
++                .withSort(Sort.by(Sort.Direction.ASC,"createdAt"));
++        Flux<MenuOrder> orders = repository.findAllByCreatedBy(USERNAME_ONE, pageRequest);
++        StepVerifier.create(orders)
++                .expectNextMatches(order ->
++                        order.getCreatedBy().equals(USERNAME_ONE) &&
++                                order.getCreatedAt().equals(ORDER_ONE_DATE))
++                .expectNextMatches(order ->
++                        order.getCreatedBy().equals(USERNAME_ONE) &&
++                                order.getCreatedAt().equals(ORDER_TWO_DATE))
++                .verifyComplete();
++    }
++
++    @Test
++    void findAllByCreatedBy_returnsEmptyListWhenUserHasNoOrders() {
++        var pageRequest = PageRequest.of(0, 10)
++                .withSort(Sort.by(Sort.Direction.ASC,"createdAt"));
++        Flux<MenuOrder> orders = repository.findAllByCreatedBy("unknown user", pageRequest);
++        StepVerifier.create(orders)
++                .expectNextCount(0)
++                .verifyComplete();
++    }
++
++    // https://stackoverflow.com/a/73233121
++    private void executeScriptBlocking(final Resource sqlScript) {
++        var populator = new ResourceDatabasePopulator();
++        populator.addScript(sqlScript);
++        populator.populate(connectionFactory).block();
++    }
++}
+Index: src/test/resources/delete-orders.sql
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/resources/delete-orders.sql b/src/test/resources/delete-orders.sql
+new file mode 100644
+--- /dev/null	(date 1726481916167)
++++ b/src/test/resources/delete-orders.sql	(date 1726481916167)
+@@ -0,0 +1,1 @@
++delete from orders;
+\ No newline at end of file
+Index: src/test/resources/insert-orders.sql
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/resources/insert-orders.sql b/src/test/resources/insert-orders.sql
+new file mode 100644
+--- /dev/null	(date 1726481916167)
++++ b/src/test/resources/insert-orders.sql	(date 1726481916167)
+@@ -0,0 +1,7 @@
++insert into orders(total_price, city, street, house, apartment, menu_line_items, status, created_by, created_at)
++values
++(10, 'CityOne', 'StreetOne', 1, 1, '[{"menuItemName":"One","price":4,"quantity":10},{"menuItemName":"Two","price":3,"quantity":5},{"menuItemName":"Three","price":3,"quantity":5}]', 'NEW', 'username1', '2024-02-18 10:23:54'),
++(10, 'CityTwo', 'StreetTwo', 1, 1, '[{"menuItemName":"One","price":4,"quantity":10},{"menuItemName":"Two","price":3,"quantity":5},{"menuItemName":"Three","price":3,"quantity":5}]', 'NEW', 'username2', '2024-02-19 10:23:54'),
++(10, 'CityOne', 'StreetOne', 1, 1, '[{"menuItemName":"One","price":4,"quantity":10},{"menuItemName":"Two","price":3,"quantity":5},{"menuItemName":"Three","price":3,"quantity":5}]', 'NEW', 'username1', '2024-02-20 10:23:54'),
++(10, 'CityTwo', 'StreetTwo', 1, 1, '[{"menuItemName":"One","price":4,"quantity":10},{"menuItemName":"Two","price":3,"quantity":5},{"menuItemName":"Three","price":3,"quantity":5}]', 'NEW', 'username2', '2024-02-21 10:23:54'),
++(10, 'CityOne', 'StreetOne', 1, 1, '[{"menuItemName":"One","price":4,"quantity":10},{"menuItemName":"Two","price":3,"quantity":5},{"menuItemName":"Three","price":3,"quantity":5}]', 'NEW', 'username1', '2024-02-22 10:23:54');
+\ No newline at end of file

@@ -1,0 +1,75 @@
+Subject: [PATCH] 1_data_layer_5
+---
+Index: src/main/resources/application.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+--- a/src/main/resources/application.yml	(revision b030d9e58be3d2abd18b9f0a5abdd2dac54f09d1)
++++ b/src/main/resources/application.yml	(date 1726771107517)
+@@ -1,3 +1,29 @@
++server:
++  port: 9092
++  shutdown: graceful
++  netty:
++    # время ожидания установки TCP соединения с сервером
++    connection-timeout: 3s
++    # время ожидания до закрытия TCP соединения, по которому не передаются данные
++    idle-timeout: 20s
++
+ spring:
+   application:
+     name: orders-service
++  lifecycle:
++    timeout-per-shutdown-phase: 30s
++  r2dbc:
++    username: user
++    password: password
++    url: r2dbc:postgresql://localhost:15432/orders_service_db
++    pool:
++      # максимальное время ожидания получения соединения с базой
++      max-create-connection-time: 2s
++      # изначальный размер пула соединений
++      initial-size: 6
++      # максимальный размер пула соединений
++      max-size: 12
++  flyway:
++    user: ${spring.r2dbc.username}
++    password: ${spring.r2dbc.password}
++    url: jdbc:postgresql://localhost:15432/orders_service_db
+\ No newline at end of file
+Index: docker/docker-compose.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker/docker-compose.yml b/docker/docker-compose.yml
+new file mode 100644
+--- /dev/null	(date 1726771057670)
++++ b/docker/docker-compose.yml	(date 1726771057670)
+@@ -0,0 +1,23 @@
++version: "3.8"
++services:
++  postgres-orders:
++    image: "postgres:16.1"
++    container_name: "postgres-orders"
++    ports:
++      - "15432:5432"
++    environment:
++      - POSTGRES_USER=user
++      - POSTGRES_PASSWORD=password
++      - POSTGRES_DB=orders_service_db
++    volumes:
++      - db-orders:/var/lib/postgresql/data
++    healthcheck:
++      test: [ "CMD-SHELL", "pg_isready", "-d", "orders_service_db" ]
++      interval: 30s
++      timeout: 60s
++      retries: 5
++      start_period: 80s
++
++volumes:
++  db-orders:
++    driver: local
+\ No newline at end of file

@@ -1,0 +1,96 @@
+Subject: [PATCH] 1_data_layer_2_HWD1
+---
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepository.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepository.java b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepository.java
+new file mode 100644
+--- /dev/null	(date 1720640889228)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepository.java	(date 1720640889228)
+@@ -0,0 +1,11 @@
++package ru.javaops.cloudjava.ordersservice.storage.repositories;
++
++import org.springframework.data.domain.Pageable;
++import org.springframework.data.repository.reactive.ReactiveCrudRepository;
++import reactor.core.publisher.Flux;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuOrder;
++
++public interface MenuOrderRepository extends ReactiveCrudRepository<MenuOrder, Long> {
++
++    Flux<MenuOrder> findAllByCreatedBy(String username, Pageable pageable);
++}
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderStatus.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderStatus.java b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderStatus.java
+new file mode 100644
+--- /dev/null	(date 1720640810284)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderStatus.java	(date 1720640810284)
+@@ -0,0 +1,7 @@
++package ru.javaops.cloudjava.ordersservice.storage.model;
++
++public enum OrderStatus {
++    NEW,
++    ACCEPTED,
++    REJECTED
++}
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/MenuOrder.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/MenuOrder.java b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/MenuOrder.java
+new file mode 100644
+--- /dev/null	(date 1720640810278)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/MenuOrder.java	(date 1720640810278)
+@@ -0,0 +1,43 @@
++package ru.javaops.cloudjava.ordersservice.storage.model;
++
++import lombok.AllArgsConstructor;
++import lombok.Builder;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++import org.springframework.data.annotation.CreatedDate;
++import org.springframework.data.annotation.Id;
++import org.springframework.data.annotation.LastModifiedDate;
++import org.springframework.data.relational.core.mapping.Column;
++import org.springframework.data.relational.core.mapping.Table;
++
++import java.math.BigDecimal;
++import java.time.LocalDateTime;
++import java.util.List;
++
++@AllArgsConstructor
++@NoArgsConstructor
++@Data
++@Builder
++@Table("orders")
++public class MenuOrder {
++    @Id
++    private Long id;
++    @Column("total_price")
++    private BigDecimal totalPrice;
++    private String city;
++    private String street;
++    private int house;
++    private int apartment;
++    @Column("menu_line_items")
++    private List<MenuLineItem> menuLineItems;
++    private OrderStatus status;
++    @Column("created_by")
++    private String createdBy;
++    @CreatedDate
++    @Column("created_at")
++    private LocalDateTime createdAt;
++    @LastModifiedDate
++    @Column("updated_at")
++    private LocalDateTime updatedAt;
++
++}
+\ No newline at end of file

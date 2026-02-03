@@ -1,0 +1,691 @@
+Subject: [PATCH] 2_service_layer_2_PHW3
+---
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestDataProvider.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestDataProvider.java b/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestDataProvider.java
+new file mode 100644
+--- /dev/null	(date 1723028366126)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestDataProvider.java	(date 1723028366126)
+@@ -0,0 +1,149 @@
++package ru.javaops.cloudjava.ordersservice.testdata;
++
++import okhttp3.mockwebserver.MockResponse;
++import org.springframework.http.HttpHeaders;
++import org.springframework.http.HttpStatus;
++import org.springframework.http.MediaType;
++import org.springframework.util.ResourceUtils;
++import ru.javaops.cloudjava.ordersservice.dto.Address;
++import ru.javaops.cloudjava.ordersservice.dto.CreateOrderRequest;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuLineItem;
++
++import java.nio.charset.StandardCharsets;
++import java.nio.file.Files;
++import java.nio.file.Path;
++import java.util.List;
++import java.util.Map;
++
++import static ru.javaops.cloudjava.ordersservice.testdata.TestConstants.*;
++
++public class TestDataProvider {
++
++    public static CreateOrderRequest createOrderRequest() {
++        return CreateOrderRequest.builder()
++                .address(Address.builder()
++                        .city(CITY_ONE)
++                        .street(STREET_ONE)
++                        .house(HOUSE_ONE)
++                        .apartment(APARTMENT_ONE)
++                        .build())
++                .nameToQuantity(Map.of(
++                        MENU_ONE, MENU_CREATE_ONE_QUANTITY,
++                        MENU_TWO, MENU_CREATE_TWO_QUANTITY,
++                        MENU_THREE, MENU_CREATE_THREE_QUANTITY
++                )).build();
++    }
++
++    public static CreateOrderRequest createOrderInvalidRequest() {
++        return CreateOrderRequest.builder()
++                .address(Address.builder()
++                        .city("")
++                        .street("")
++                        .house(-1)
++                        .apartment(-1)
++                        .build())
++                .nameToQuantity(Map.of(
++                        MENU_ONE, MENU_CREATE_ONE_QUANTITY,
++                        MENU_TWO, MENU_CREATE_TWO_QUANTITY,
++                        MENU_THREE, MENU_CREATE_THREE_QUANTITY
++                )).build();
++    }
++
++    public static MenuLineItem firstExisting() {
++        return MenuLineItem.builder()
++                .menuItemName(MENU_ONE)
++                .price(MENU_ONE_PRICE)
++                .quantity(MENU_ONE_QUANTITY)
++                .build();
++    }
++
++    public static MenuLineItem secondExisting() {
++        return MenuLineItem.builder()
++                .menuItemName(MENU_TWO)
++                .price(MENU_TWO_PRICE)
++                .quantity(MENU_TWO_QUANTITY)
++                .build();
++    }
++
++    public static MenuLineItem thirdExisting() {
++        return MenuLineItem.builder()
++                .menuItemName(MENU_THREE)
++                .price(MENU_THREE_PRICE)
++                .quantity(MENU_THREE_QUANTITY)
++                .build();
++    }
++
++    public static List<MenuLineItem> existingItems() {
++        return List.of(
++                firstExisting(),
++                secondExisting(),
++                thirdExisting()
++        );
++    }
++
++    public static MenuLineItem firstCreatedItem() {
++        return MenuLineItem.builder()
++                .menuItemName(MENU_ONE)
++                .price(MENU_CREATE_ONE_PRICE)
++                .quantity(MENU_CREATE_ONE_QUANTITY)
++                .build();
++    }
++
++    public static MenuLineItem secondCreatedItem() {
++        return MenuLineItem.builder()
++                .menuItemName(MENU_TWO)
++                .price(MENU_CREATE_TWO_PRICE)
++                .quantity(MENU_CREATE_TWO_QUANTITY)
++                .build();
++    }
++
++    public static MenuLineItem thirdCreatedItem() {
++        return MenuLineItem.builder()
++                .menuItemName(MENU_THREE)
++                .price(MENU_CREATE_THREE_PRICE)
++                .quantity(MENU_CREATE_THREE_QUANTITY)
++                .build();
++    }
++
++    public static List<MenuLineItem> createdItems() {
++        return List.of(
++                firstCreatedItem(),
++                secondCreatedItem(),
++                thirdCreatedItem()
++        );
++    }
++
++    /**
++     * Возвращает результат запроса о доступности и ценах блюд.
++     * Одно из возвращаемых блюд недоступно для заказа.
++     */
++    public static MockResponse partialSuccessResponse() {
++        return new MockResponse()
++                .addHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
++                .setBody(readPartiallySuccessfulResponse());
++    }
++
++    public static MockResponse successResponse() {
++        return new MockResponse()
++                .addHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
++                .setResponseCode(HttpStatus.OK.value())
++                .setBody(readSuccessfulResponse());
++    }
++
++    public static String readSuccessfulResponse() {
++        return readFileToString("wiremock/success-response.json");
++    }
++
++    public static String readPartiallySuccessfulResponse() {
++        return readFileToString("wiremock/partially-success-response.json");
++    }
++
++    private static String readFileToString(String filePath) {
++        try {
++            Path path = ResourceUtils.getFile("classpath:" + filePath).toPath();
++            return Files.readString(path, StandardCharsets.UTF_8);
++        } catch (Exception e) {
++            throw new RuntimeException(e);
++        }
++    }
++}
+\ No newline at end of file
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java	(revision 6f075217c0ebe6ad870448d4dd63eb97ea565238)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java	(date 1723028366126)
+@@ -1,27 +1,16 @@
+ package ru.javaops.cloudjava.ordersservice.storage.repositories;
+ 
+-import io.r2dbc.spi.ConnectionFactory;
+-import org.junit.jupiter.api.AfterEach;
+-import org.junit.jupiter.api.BeforeEach;
+ import org.junit.jupiter.api.Test;
+ import org.springframework.beans.factory.annotation.Autowired;
+-import org.springframework.beans.factory.annotation.Value;
+ import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
+ import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
+ import org.springframework.boot.test.autoconfigure.data.r2dbc.DataR2dbcTest;
+ import org.springframework.context.annotation.Import;
+-import org.springframework.core.io.Resource;
+ import org.springframework.data.domain.PageRequest;
+ import org.springframework.data.domain.Sort;
+-import org.springframework.r2dbc.connection.init.ResourceDatabasePopulator;
+-import org.springframework.test.context.DynamicPropertyRegistry;
+-import org.springframework.test.context.DynamicPropertySource;
+-import org.testcontainers.containers.PostgreSQLContainer;
+-import org.testcontainers.junit.jupiter.Container;
+-import org.testcontainers.junit.jupiter.Testcontainers;
+-import org.testcontainers.utility.DockerImageName;
+ import reactor.core.publisher.Flux;
+ import reactor.test.StepVerifier;
++import ru.javaops.cloudjava.ordersservice.BaseTest;
+ import ru.javaops.cloudjava.ordersservice.config.R2dbcConfig;
+ import ru.javaops.cloudjava.ordersservice.storage.model.MenuOrder;
+ 
+@@ -30,40 +19,10 @@
+ @Import({R2dbcConfig.class})
+ @ImportAutoConfiguration({JacksonAutoConfiguration.class})
+ @DataR2dbcTest
+-@Testcontainers
+-public class MenuOrderRepositoryTest {
++public class MenuOrderRepositoryTest extends BaseTest {
+ 
+     @Autowired
+     private MenuOrderRepository repository;
+-    @Autowired
+-    private ConnectionFactory connectionFactory;
+-    @Container
+-    static PostgreSQLContainer<?> container = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16.1"));
+-
+-    @DynamicPropertySource
+-    static void applyProperties(DynamicPropertyRegistry registry) {
+-        var url = "r2dbc:postgresql://" +
+-                container.getHost() + ":" +
+-                container.getMappedPort(PostgreSQLContainer.POSTGRESQL_PORT) + "/" +
+-                container.getDatabaseName();
+-
+-        registry.add("spring.r2dbc.url", () -> url);
+-        registry.add("spring.r2dbc.username", container::getUsername);
+-        registry.add("spring.r2dbc.password", container::getPassword);
+-        registry.add("spring.flyway.url", container::getJdbcUrl);
+-        registry.add("spring.flyway.user", container::getUsername);
+-        registry.add("spring.flyway.password", container::getPassword);
+-    }
+-
+-    @BeforeEach
+-    void populateDb(@Value("classpath:insert-orders.sql") Resource script) {
+-        executeScriptBlocking(script);
+-    }
+-
+-    @AfterEach
+-    void clearDb(@Value("classpath:delete-orders.sql") Resource script) {
+-        executeScriptBlocking(script);
+-    }
+ 
+     @Test
+     void findAllByCreatedBy_returnsCorrectSortedByDateDesc() {
+@@ -105,11 +64,4 @@
+                 .expectNextCount(0)
+                 .verifyComplete();
+     }
+-
+-    // https://stackoverflow.com/a/73233121
+-    private void executeScriptBlocking(final Resource sqlScript) {
+-        var populator = new ResourceDatabasePopulator();
+-        populator.addScript(sqlScript);
+-        populator.populate(connectionFactory).block();
+-    }
+ }
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImplTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImplTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImplTest.java
+new file mode 100644
+--- /dev/null	(date 1724950028806)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImplTest.java	(date 1724950028806)
+@@ -0,0 +1,80 @@
++package ru.javaops.cloudjava.ordersservice.service.impl;
++
++import org.junit.jupiter.api.Test;
++import org.springframework.beans.factory.annotation.Autowired;
++import reactor.core.publisher.Flux;
++import reactor.core.publisher.Mono;
++import reactor.test.StepVerifier;
++import ru.javaops.cloudjava.ordersservice.BaseIntegrationTest;
++import ru.javaops.cloudjava.ordersservice.dto.OrderResponse;
++import ru.javaops.cloudjava.ordersservice.dto.SortBy;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuLineItem;
++import ru.javaops.cloudjava.ordersservice.storage.model.OrderStatus;
++import ru.javaops.cloudjava.ordersservice.testdata.TestConstants;
++
++import java.time.LocalDateTime;
++import java.util.ArrayList;
++import java.util.Comparator;
++
++import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
++import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
++import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
++import static ru.javaops.cloudjava.ordersservice.testdata.TestConstants.*;
++import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.createOrderRequest;
++import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.existingItems;
++
++class MenuOrderServiceImplTest extends BaseIntegrationTest {
++
++    @Autowired
++    private MenuOrderServiceImpl menuOrderService;
++
++    @Test
++    void getOrdersOfUser_returnsCorrectFluxWhenUserHasOrders() {
++        Flux<OrderResponse> orders = menuOrderService.getOrdersOfUser(USERNAME_ONE, SortBy.DATE_ASC, 0, 10);
++        StepVerifier.create(orders)
++                .expectNextMatches(order -> assertOrder(order, ORDER_ONE_DATE))
++                .expectNextMatches(order -> assertOrder(order, ORDER_TWO_DATE))
++                .expectNextMatches(order -> assertOrder(order, ORDER_THREE_DATE))
++                .verifyComplete();
++    }
++
++    @Test
++    void createOrder_createsOrderWhenAllMenusAreAvailable() {
++        prepareStubForSuccess();
++
++        var createOrderRequest = createOrderRequest();
++        var now = LocalDateTime.now().minusNanos(1000);
++        Mono<OrderResponse> response = menuOrderService.createOrder(createOrderRequest, USERNAME_ONE);
++        StepVerifier.create(response)
++                .expectNextMatches(orderResponse -> {
++                    assertThat(orderResponse.getAddress()).isEqualTo(createOrderRequest.getAddress());
++                    assertThat(orderResponse.getTotalPrice()).isEqualTo(TestConstants.SUCCESS_TOTAL_PRICE);
++                    assertThat(orderResponse.getStatus()).isEqualTo(OrderStatus.NEW);
++                    assertThat(orderResponse.getCreatedAt()).isAfter(now);
++                    var menuItems = new ArrayList<>(orderResponse.getMenuLineItems());
++                    menuItems.sort(Comparator.comparing(MenuLineItem::getPrice));
++                    assertThat(menuItems)
++                            .map(MenuLineItem::getMenuItemName)
++                            .containsExactly(MENU_ONE, MENU_TWO, MENU_THREE);
++                    assertThat(menuItems)
++                            .map(MenuLineItem::getQuantity)
++                            .containsExactly(MENU_CREATE_ONE_QUANTITY, MENU_CREATE_TWO_QUANTITY, MENU_CREATE_THREE_QUANTITY);
++                    assertThat(menuItems)
++                            .map(MenuLineItem::getPrice)
++                            .containsExactly(MENU_CREATE_ONE_PRICE, MENU_CREATE_TWO_PRICE, MENU_CREATE_THREE_PRICE);
++                    return orderResponse.getOrderId() != null;
++                })
++                .verifyComplete();
++
++        wiremock.verify(1, postRequestedFor(urlEqualTo(MENU_INFO_PATH)));
++    }
++
++    private boolean assertOrder(OrderResponse order, LocalDateTime createdAt) {
++        return order.getOrderId() != null &&
++                order.getAddress().getCity().equals(CITY_ONE) &&
++                order.getAddress().getStreet().equals(STREET_ONE) &&
++                order.getStatus().equals(OrderStatus.NEW) &&
++                order.getCreatedAt().equals(createdAt) &&
++                order.getMenuLineItems().equals(existingItems());
++    }
++}
+\ No newline at end of file
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/BaseIntegrationTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/BaseIntegrationTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseIntegrationTest.java
+new file mode 100644
+--- /dev/null	(date 1724949400676)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseIntegrationTest.java	(date 1724949400676)
+@@ -0,0 +1,53 @@
++package ru.javaops.cloudjava.ordersservice;
++
++import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
++import org.junit.jupiter.api.extension.RegisterExtension;
++import org.springframework.boot.test.context.SpringBootTest;
++import org.springframework.test.context.DynamicPropertyRegistry;
++import org.springframework.test.context.DynamicPropertySource;
++
++import static com.github.tomakehurst.wiremock.client.WireMock.*;
++import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
++import static ru.javaops.cloudjava.ordersservice.testdata.TestConstants.DELAY_MILLIS;
++import static ru.javaops.cloudjava.ordersservice.testdata.TestConstants.MENU_INFO_PATH;
++import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.readPartiallySuccessfulResponse;
++import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.readSuccessfulResponse;
++
++@SpringBootTest
++public class BaseIntegrationTest extends BaseTest {
++
++    @RegisterExtension
++    protected static WireMockExtension wiremock = WireMockExtension.newInstance()
++            .options(wireMockConfig().dynamicPort())
++            .build();
++
++    @DynamicPropertySource
++    static void applyProperties(DynamicPropertyRegistry registry) {
++        registry.add("external.menu-service-url", wiremock::baseUrl);
++    }
++
++    protected void prepareStubForServiceUnavailable() {
++        wiremock.stubFor(post(MENU_INFO_PATH)
++                .willReturn(serviceUnavailable()));
++    }
++
++    protected void prepareStubForSuccessWithTimeout() {
++        var responseBody = readSuccessfulResponse();
++        wiremock.stubFor(post(MENU_INFO_PATH)
++                .willReturn(okJson(responseBody).withFixedDelay(DELAY_MILLIS))
++        );
++    }
++
++    protected void prepareStubForPartialSuccess() {
++        var responseBody = readPartiallySuccessfulResponse();
++        wiremock.stubFor(post(MENU_INFO_PATH)
++                .willReturn(okJson(responseBody))
++        );
++    }
++
++    protected void prepareStubForSuccess() {
++        var responseBody = readSuccessfulResponse();
++        wiremock.stubFor(post(MENU_INFO_PATH)
++                .willReturn(okJson(responseBody)));
++    }
++}
+\ No newline at end of file
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestConstants.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestConstants.java b/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestConstants.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestConstants.java	(revision 6f075217c0ebe6ad870448d4dd63eb97ea565238)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/testdata/TestConstants.java	(date 1723028366126)
+@@ -1,11 +1,19 @@
+ package ru.javaops.cloudjava.ordersservice.testdata;
+ 
+ import java.math.BigDecimal;
++import java.time.Duration;
+ import java.time.LocalDateTime;
+ import java.time.Month;
+ 
+ public class TestConstants {
+ 
++    public static final int DELAY_MILLIS = 1500;
++    public static final int RETRY_COUNT = 3;
++    public static final double RETRY_JITTER = 0.75;
++    public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(1);
++    public static final String DEFAULT_TIMEOUT_STR = "1s";
++    public static final Duration RETRY_BACKOFF = Duration.ofMillis(10);
++
+     public static final String BASE_URL = "/v1/menu-orders";
+     public static final String MENU_INFO_PATH = "/v1/menu-items/menu-info";
+ 
+Index: src/test/resources/wiremock/success-response.json
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/resources/wiremock/success-response.json b/src/test/resources/wiremock/success-response.json
+new file mode 100644
+--- /dev/null	(date 1723028366127)
++++ b/src/test/resources/wiremock/success-response.json	(date 1723028366127)
+@@ -0,0 +1,19 @@
++{
++  "menuInfos": [
++    {
++      "name": "One",
++      "price": 10.1,
++      "isAvailable": true
++    },
++    {
++      "name": "Two",
++      "price": 20.2,
++      "isAvailable": true
++    },
++    {
++      "name": "Three",
++      "price": 30.3,
++      "isAvailable": true
++    }
++  ]
++}
+\ No newline at end of file
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java
+new file mode 100644
+--- /dev/null	(date 1723028366124)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java	(date 1723028366124)
+@@ -0,0 +1,52 @@
++package ru.javaops.cloudjava.ordersservice;
++
++import io.r2dbc.spi.ConnectionFactory;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.beans.factory.annotation.Value;
++import org.springframework.core.io.Resource;
++import org.springframework.r2dbc.connection.init.ResourceDatabasePopulator;
++import org.testcontainers.containers.PostgreSQLContainer;
++import org.testcontainers.utility.DockerImageName;
++
++import static ru.javaops.cloudjava.ordersservice.testdata.TestConstants.DEFAULT_TIMEOUT_STR;
++
++public abstract class BaseTest {
++
++    @Autowired
++    private ConnectionFactory connectionFactory;
++
++    static final PostgreSQLContainer<?> container = new PostgreSQLContainer<>(DockerImageName.parse("postgres:16.1"))
++            .withReuse(true)
++            .withDatabaseName("test_database")
++            .withUsername("user")
++            .withPassword("password");
++
++    static {
++        container.start();
++        System.setProperty("spring.r2dbc.url", "r2dbc:postgresql://" + container.getHost() + ":" +
++                container.getFirstMappedPort() + "/test_database");
++        System.setProperty("spring.r2dbc.username", container.getUsername());
++        System.setProperty("spring.r2dbc.password", container.getPassword());
++        System.setProperty("spring.flyway.url", container.getJdbcUrl());
++        System.setProperty("external.default-timeout", DEFAULT_TIMEOUT_STR);
++    }
++
++    @BeforeEach
++    void populateDb(@Value("classpath:insert-orders.sql") Resource script) {
++        executeScriptBlocking(script);
++    }
++
++    @AfterEach
++    void clearDb(@Value("classpath:delete-orders.sql") Resource script) {
++        executeScriptBlocking(script);
++    }
++
++    // https://stackoverflow.com/a/73233121
++    private void executeScriptBlocking(final Resource sqlScript) {
++        var populator = new ResourceDatabasePopulator();
++        populator.addScript(sqlScript);
++        populator.populate(connectionFactory).block();
++    }
++}
+\ No newline at end of file
+Index: src/test/resources/wiremock/partially-success-response.json
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/resources/wiremock/partially-success-response.json b/src/test/resources/wiremock/partially-success-response.json
+new file mode 100644
+--- /dev/null	(date 1723028366126)
++++ b/src/test/resources/wiremock/partially-success-response.json	(date 1723028366126)
+@@ -0,0 +1,19 @@
++{
++  "menuInfos": [
++    {
++      "name": "One",
++      "price": 10.1,
++      "isAvailable": true
++    },
++    {
++      "name": "Two",
++      "price": null,
++      "isAvailable": false
++    },
++    {
++      "name": "Three",
++      "price": 30.3,
++      "isAvailable": true
++    }
++  ]
++}
+\ No newline at end of file
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/client/MenuClientTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/client/MenuClientTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/client/MenuClientTest.java
+new file mode 100644
+--- /dev/null	(date 1724948416500)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/client/MenuClientTest.java	(date 1724948416500)
+@@ -0,0 +1,121 @@
++package ru.javaops.cloudjava.ordersservice.client;
++
++import okhttp3.mockwebserver.MockResponse;
++import okhttp3.mockwebserver.MockWebServer;
++import okhttp3.mockwebserver.RecordedRequest;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.BeforeEach;
++import org.junit.jupiter.api.Test;
++import org.springframework.http.HttpStatus;
++import org.springframework.web.reactive.function.client.WebClient;
++import reactor.core.publisher.Mono;
++import reactor.test.StepVerifier;
++import ru.javaops.cloudjava.ordersservice.config.props.OrderServiceProps;
++import ru.javaops.cloudjava.ordersservice.dto.GetMenuInfoRequest;
++import ru.javaops.cloudjava.ordersservice.dto.GetMenuInfoResponse;
++import ru.javaops.cloudjava.ordersservice.dto.MenuInfo;
++import ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider;
++
++import java.io.IOException;
++import java.math.BigDecimal;
++import java.util.Comparator;
++import java.util.List;
++import java.util.Set;
++import java.util.concurrent.TimeUnit;
++
++import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
++import static ru.javaops.cloudjava.ordersservice.testdata.TestConstants.*;
++
++class MenuClientTest {
++
++    private final OrderServiceProps props = new OrderServiceProps(
++            "http://localhost:9091",
++            "/v1/menu-item/menu-info",
++            DEFAULT_TIMEOUT,
++            RETRY_BACKOFF,
++            RETRY_COUNT,
++            RETRY_JITTER
++    );
++    private MenuClient menuClient;
++    private MockWebServer mockWebServer;
++
++    @BeforeEach
++    void setupServer() throws Exception {
++        mockWebServer = new MockWebServer();
++        mockWebServer.start();
++        var webClient = WebClient.builder()
++                // направляем клиента на базовый url, на котором поднят mockWebServer
++                .baseUrl(mockWebServer.url("/").uri().toString())
++                .build();
++        menuClient = new MenuClient(webClient, props);
++    }
++
++    @AfterEach
++    void tearDown() throws IOException {
++        mockWebServer.shutdown();
++    }
++
++    @Test
++    void getMenuInfo_returnsInfo_whenRetriesSucceed() throws Exception {
++        // на первый запрос ответ сервера - SERVICE_UNAVAILABLE
++        mockWebServer.enqueue(new MockResponse().setResponseCode(HttpStatus.SERVICE_UNAVAILABLE.value()));
++        // на второй запрос ответ сервера с большой задержкой (1500ms)
++        mockWebServer.enqueue(TestDataProvider.partialSuccessResponse().setBodyDelay(DELAY_MILLIS, TimeUnit.MILLISECONDS));
++        // на третий запрос ответ сервера без задержек
++        mockWebServer.enqueue(TestDataProvider.partialSuccessResponse());
++
++        var request = new GetMenuInfoRequest(Set.of("One", "Two", "Three"));
++        Mono<GetMenuInfoResponse> response = menuClient.getMenuInfo(request);
++        assertResponseCorrect(response);
++        verifyNumberOfPostRequests(3);
++    }
++
++    @Test
++    void getMenuInfo_returnsInfo_whenAllIsOk() throws Exception {
++        mockWebServer.enqueue(TestDataProvider.partialSuccessResponse());
++        var request = new GetMenuInfoRequest(Set.of("One", "Two", "Three"));
++        Mono<GetMenuInfoResponse> response = menuClient.getMenuInfo(request);
++        assertResponseCorrect(response);
++        verifyNumberOfPostRequests(1);
++    }
++
++    private void assertResponseCorrect(Mono<GetMenuInfoResponse> response) {
++        StepVerifier.create(response)
++                .expectNextMatches(result -> {
++                    List<MenuInfo> menuInfos = result.getMenuInfos();
++                    menuInfos.sort(Comparator.comparing(MenuInfo::getName));
++                    assertThat(menuInfos)
++                            .map(MenuInfo::getName)
++                            .containsExactly("One", "Three", "Two");
++                    assertThat(menuInfos)
++                            .map(MenuInfo::getPrice)
++                            .containsExactly(
++                                    BigDecimal.valueOf(10.1),
++                                    BigDecimal.valueOf(30.3),
++                                    null
++                            );
++                    assertThat(menuInfos)
++                            .map(MenuInfo::getIsAvailable)
++                            .containsExactly(
++                                    true, true, false
++                            );
++                    return true;
++                })
++                .verifyComplete();
++    }
++
++    private void verifyNumberOfPostRequests(int times) throws Exception {
++        for (int i = 0; i < times; i++) {
++            // ответы уже готовы и достаются из mockWebServer без задержек
++            // делаем timeout, чтобы при некорректной реализации тесты не заблокировались
++            RecordedRequest recordedRequest = mockWebServer.takeRequest(1000, TimeUnit.MILLISECONDS);
++            assertThat(recordedRequest)
++                    .as("Recorded requests: %d, expected: %d", i, times)
++                    .isNotNull();
++            assertThat(recordedRequest.getMethod()).isEqualTo("POST");
++            assertThat(recordedRequest.getPath()).isEqualTo(props.getMenuInfoPath());
++        }
++        assertThat(mockWebServer.takeRequest(1000, TimeUnit.MILLISECONDS))
++                .as("Expected %d requests, but received more", times).isNull();
++    }
++}
+\ No newline at end of file

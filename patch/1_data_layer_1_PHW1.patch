@@ -1,0 +1,202 @@
+Subject: [PATCH] 1_data_layer_1_PHW1
+---
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/exception/OrderServiceException.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/exception/OrderServiceException.java b/src/main/java/ru/javaops/cloudjava/ordersservice/exception/OrderServiceException.java
+new file mode 100644
+--- /dev/null	(date 1720640569626)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/exception/OrderServiceException.java	(date 1720640569626)
+@@ -0,0 +1,14 @@
++package ru.javaops.cloudjava.ordersservice.exception;
++
++import lombok.Getter;
++import org.springframework.http.HttpStatus;
++
++@Getter
++public class OrderServiceException extends RuntimeException {
++    private final HttpStatus status;
++
++    public OrderServiceException(String message, HttpStatus status) {
++        super(message);
++        this.status = status;
++    }
++}
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/config/R2dbcConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/config/R2dbcConfig.java b/src/main/java/ru/javaops/cloudjava/ordersservice/config/R2dbcConfig.java
+new file mode 100644
+--- /dev/null	(date 1720640637368)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/config/R2dbcConfig.java	(date 1720640637368)
+@@ -0,0 +1,27 @@
++package ru.javaops.cloudjava.ordersservice.config;
++
++import com.fasterxml.jackson.databind.ObjectMapper;
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Configuration;
++import org.springframework.core.convert.converter.Converter;
++import org.springframework.data.r2dbc.config.EnableR2dbcAuditing;
++import org.springframework.data.r2dbc.convert.R2dbcCustomConversions;
++import org.springframework.data.r2dbc.dialect.PostgresDialect;
++import ru.javaops.cloudjava.ordersservice.storage.converters.MenuLineItemCollectionReadConverter;
++import ru.javaops.cloudjava.ordersservice.storage.converters.MenuLineItemCollectionWriteConverter;
++
++import java.util.List;
++
++@Configuration
++@EnableR2dbcAuditing
++public class R2dbcConfig {
++
++    @Bean
++    public R2dbcCustomConversions r2dbcCustomConversions(ObjectMapper objectMapper) {
++        List<Converter<?,?>> converters = List.of(
++                new MenuLineItemCollectionReadConverter(objectMapper),
++                new MenuLineItemCollectionWriteConverter(objectMapper)
++        );
++        return R2dbcCustomConversions.of(PostgresDialect.INSTANCE, converters);
++    }
++}
+\ No newline at end of file
+Index: src/main/resources/db/migration/V1__orders_initial_schema.sql
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/db/migration/V1__orders_initial_schema.sql b/src/main/resources/db/migration/V1__orders_initial_schema.sql
+new file mode 100644
+--- /dev/null	(date 1720640569645)
++++ b/src/main/resources/db/migration/V1__orders_initial_schema.sql	(date 1720640569645)
+@@ -0,0 +1,13 @@
++CREATE TABLE IF NOT EXISTS orders (
++    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
++    total_price NUMERIC(6, 2) NOT NULL,
++    city TEXT NOT NULL,
++    street TEXT NOT NULL,
++    house INTEGER NOT NULL,
++    apartment INTEGER NOT NULL,
++    menu_line_items JSONB NOT NULL,
++    status TEXT NOT NULL,
++    created_by TEXT NOT NULL,
++    created_at TIMESTAMP NOT NULL,
++    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
++);
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/MenuLineItem.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/MenuLineItem.java b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/MenuLineItem.java
+new file mode 100644
+--- /dev/null	(date 1720640569640)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/MenuLineItem.java	(date 1720640569640)
+@@ -0,0 +1,18 @@
++package ru.javaops.cloudjava.ordersservice.storage.model;
++
++import lombok.AllArgsConstructor;
++import lombok.Builder;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++
++import java.math.BigDecimal;
++
++@Data
++@Builder
++@AllArgsConstructor
++@NoArgsConstructor
++public class MenuLineItem {
++    private String menuItemName;
++    private BigDecimal price;
++    private Integer quantity;
++}
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/storage/converters/MenuLineItemCollectionWriteConverter.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/converters/MenuLineItemCollectionWriteConverter.java b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/converters/MenuLineItemCollectionWriteConverter.java
+new file mode 100644
+--- /dev/null	(date 1720640744102)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/converters/MenuLineItemCollectionWriteConverter.java	(date 1720640744102)
+@@ -0,0 +1,31 @@
++package ru.javaops.cloudjava.ordersservice.storage.converters;
++
++import com.fasterxml.jackson.core.JsonProcessingException;
++import com.fasterxml.jackson.databind.ObjectMapper;
++import io.r2dbc.postgresql.codec.Json;
++import jakarta.validation.constraints.NotNull;
++import lombok.RequiredArgsConstructor;
++import org.springframework.core.convert.converter.Converter;
++import org.springframework.data.convert.WritingConverter;
++import org.springframework.http.HttpStatus;
++import ru.javaops.cloudjava.ordersservice.exception.OrderServiceException;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuLineItem;
++
++import java.util.List;
++
++@WritingConverter
++@RequiredArgsConstructor
++public class MenuLineItemCollectionWriteConverter implements Converter<List<MenuLineItem>, Json> {
++
++    private final ObjectMapper objectMapper;
++
++    @Override
++    public Json convert(@NotNull List<MenuLineItem> menuLineItems) {
++        try {
++            return Json.of(objectMapper.writeValueAsString(menuLineItems));
++        } catch (JsonProcessingException e) {
++            var msg = String.format("Failed to convert MenuLineItemCollection %s to JSON", menuLineItems);
++            throw new OrderServiceException(msg, HttpStatus.INTERNAL_SERVER_ERROR);
++        }
++    }
++}
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/storage/converters/MenuLineItemCollectionReadConverter.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/converters/MenuLineItemCollectionReadConverter.java b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/converters/MenuLineItemCollectionReadConverter.java
+new file mode 100644
+--- /dev/null	(date 1720640569631)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/converters/MenuLineItemCollectionReadConverter.java	(date 1720640569631)
+@@ -0,0 +1,32 @@
++package ru.javaops.cloudjava.ordersservice.storage.converters;
++
++import com.fasterxml.jackson.core.type.TypeReference;
++import com.fasterxml.jackson.databind.ObjectMapper;
++import io.r2dbc.postgresql.codec.Json;
++import lombok.RequiredArgsConstructor;
++import org.springframework.core.convert.converter.Converter;
++import org.springframework.data.convert.ReadingConverter;
++import org.springframework.http.HttpStatus;
++import ru.javaops.cloudjava.ordersservice.exception.OrderServiceException;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuLineItem;
++
++import java.io.IOException;
++import java.util.List;
++
++@ReadingConverter
++@RequiredArgsConstructor
++public class MenuLineItemCollectionReadConverter implements Converter<Json, List<MenuLineItem>> {
++
++    private final ObjectMapper objectMapper;
++
++    @Override
++    public List<MenuLineItem> convert(Json value) {
++        try {
++            return objectMapper.readValue(value.asArray(), new TypeReference<List<MenuLineItem>>() {});
++
++        } catch (IOException e) {
++            var msg = String.format("Failed to convert JSON %s to MenuLineItemCollection", value.asString());
++            throw new OrderServiceException(msg, HttpStatus.INTERNAL_SERVER_ERROR);
++        }
++    }
++}
+\ No newline at end of file

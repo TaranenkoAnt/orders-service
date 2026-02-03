@@ -1,0 +1,33 @@
+Subject: [PATCH] 1_data_layer_4_HWD2
+---
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java	(revision 666e8cbaaff4b16534e60156bce2bc858335783f)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/storage/repositories/MenuOrderRepositoryTest.java	(revision 02adcfa50401bd4d953cd4583ab1bb3e2022de4c)
+@@ -66,6 +66,22 @@
+         executeScriptBlocking(script);
+     }
+ 
++    @Test
++    void findAllByCreatedBy_returnsCorrectSortedByDateDesc() {
++        var pageRequest = PageRequest.of(0, 2)
++                .withSort(Sort.by(Sort.Direction.DESC, "createdAt"));
++        Flux<MenuOrder> orders = repository.findAllByCreatedBy(USERNAME_ONE, pageRequest);
++        StepVerifier.create(orders)
++                .expectNextMatches(order ->
++                        order.getCreatedBy().equals(USERNAME_ONE) &&
++                                order.getCreatedAt().equals(ORDER_THREE_DATE))
++                .expectNextMatches(order ->
++                        order.getCreatedBy().equals(USERNAME_ONE) &&
++                                order.getCreatedAt().equals(ORDER_TWO_DATE) &&
++                                order.getUpdatedAt() != null)
++                .verifyComplete();
++    }
++
+     @Test
+     void findAllByCreatedBy_returnsCorrectSortedByDateAsc() {
+         var pageRequest = PageRequest.of(0, 2)

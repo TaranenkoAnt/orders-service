@@ -1,0 +1,185 @@
+Subject: [PATCH] 3_rest_layer_4_HWD4
+---
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java	(revision 671f91f1dc73e8d918f07ed8e4de88ee87471c42)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java	(date 1726776255650)
+@@ -9,11 +9,12 @@
+ import ru.javaops.cloudjava.ordersservice.dto.OrderResponse;
+ import ru.javaops.cloudjava.ordersservice.storage.model.OrderStatus;
+ 
++import java.util.Comparator;
++
+ import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
+ import static ru.javaops.cloudjava.ordersservice.controller.MenuOrderController.USER_HEADER;
+ import static ru.javaops.cloudjava.ordersservice.testdata.TestConstants.*;
+-import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.createOrderRequest;
+-import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.createdItems;
++import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.*;
+ 
+ @AutoConfigureWebTestClient(timeout = "20000")
+ class MenuOrderControllerTest extends BaseIntegrationTest {
+@@ -55,4 +56,52 @@
+                 .exchange()
+                 .expectStatus().isNotFound();
+     }
++
++    @Test
++    void getOrdersOfUser_returnsCorrectlySortedListOfOrders() {
++        webTestClient.get()
++                .uri(BASE_URL + "?from=0&size=10&sortBy=date_asc")
++                .header(USER_HEADER, USERNAME_ONE)
++                .exchange()
++                .expectStatus().isOk()
++                .expectBodyList(OrderResponse.class)
++                .value(orders -> {
++                    assertThat(orders).hasSize(3)
++                            .isSortedAccordingTo(Comparator.comparing(OrderResponse::getCreatedAt));
++                });
++    }
++
++    @Test
++    void submitMenuOrder_returnsBadRequest_whenOrderInvalid() {
++        var invalidRequest = createOrderInvalidRequest();
++        webTestClient.post()
++                .uri(BASE_URL)
++                .header(USER_HEADER, USERNAME_ONE)
++                .contentType(MediaType.APPLICATION_JSON)
++                .bodyValue(invalidRequest)
++                .exchange()
++                .expectStatus().isBadRequest();
++    }
++
++    @Test
++    void submitMenuOrder_returnsServiceUnavailableOnTimeout() {
++        prepareStubForSuccessWithTimeout();
++        var validRequest = createOrderRequest();
++        webTestClient.post()
++                .uri(BASE_URL)
++                .contentType(MediaType.APPLICATION_JSON)
++                .header(USER_HEADER, USERNAME_ONE)
++                .bodyValue(validRequest)
++                .exchange()
++                .expectStatus().is5xxServerError();
++    }
++
++    @Test
++    void getOrdersOfUser_returnsBadRequestForInvalidParams() {
++        webTestClient.get()
++                .uri(BASE_URL + "?from=-1&size=10")
++                .header(USER_HEADER, USERNAME_ONE)
++                .exchange()
++                .expectStatus().isBadRequest();
++    }
+ }
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderController.java b/src/main/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderController.java
+--- a/src/main/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderController.java	(revision 671f91f1dc73e8d918f07ed8e4de88ee87471c42)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderController.java	(date 1726775633434)
+@@ -1,10 +1,25 @@
+ package ru.javaops.cloudjava.ordersservice.controller;
+ 
++import io.swagger.v3.oas.annotations.Operation;
++import io.swagger.v3.oas.annotations.media.Content;
++import io.swagger.v3.oas.annotations.media.Schema;
++import io.swagger.v3.oas.annotations.responses.ApiResponse;
++import io.swagger.v3.oas.annotations.responses.ApiResponses;
+ import io.swagger.v3.oas.annotations.tags.Tag;
++import jakarta.validation.Valid;
++import jakarta.validation.constraints.NotBlank;
++import jakarta.validation.constraints.Positive;
++import jakarta.validation.constraints.PositiveOrZero;
+ import lombok.RequiredArgsConstructor;
+ import lombok.extern.slf4j.Slf4j;
+-import org.springframework.web.bind.annotation.RequestMapping;
+-import org.springframework.web.bind.annotation.RestController;
++import org.springframework.http.HttpStatus;
++import org.springframework.http.ProblemDetail;
++import org.springframework.web.bind.annotation.*;
++import reactor.core.publisher.Flux;
++import reactor.core.publisher.Mono;
++import ru.javaops.cloudjava.ordersservice.dto.CreateOrderRequest;
++import ru.javaops.cloudjava.ordersservice.dto.OrderResponse;
++import ru.javaops.cloudjava.ordersservice.dto.SortBy;
+ import ru.javaops.cloudjava.ordersservice.service.MenuOrderService;
+ 
+ @Tag(name = "MenuOrderController", description = "REST API для работы с заказами.")
+@@ -18,4 +33,69 @@
+ 
+     private final MenuOrderService menuOrderService;
+ 
++    @Operation(
++            summary = "${api.submit-order.summary}",
++            description = "${api.submit-order.description}"
++    )
++    @ApiResponses(value = {
++            @ApiResponse(responseCode = "201", description = "${api.response.submitOk}"),
++            @ApiResponse(
++                    responseCode = "400",
++                    description = "${api.response.submitBadRequest}",
++                    content = @Content(
++                            schema = @Schema(implementation = ProblemDetail.class)
++                    )
++            ),
++            @ApiResponse(
++                    responseCode = "404",
++                    description = "${api.response.submitNotFound}",
++                    content = @Content(
++                            schema = @Schema(implementation = ProblemDetail.class)
++                    )
++            ),
++            @ApiResponse(
++                    responseCode = "500",
++                    description = "${api.response.submitInternalError}",
++                    content = @Content(
++                            schema = @Schema(implementation = ProblemDetail.class)
++                    )
++            )
++    })
++    @PostMapping
++    @ResponseStatus(HttpStatus.CREATED)
++    public Mono<OrderResponse> submitMenuOrder(@RequestBody @Valid CreateOrderRequest request,
++                                               @RequestHeader(USER_HEADER) String username) {
++        log.info("Received POST request to submit order: {}", request);
++        return menuOrderService.createOrder(request, username);
++    }
++
++    @Operation(
++            summary = "${api.get-orders.summary}",
++            description = "${api.get-orders.description}"
++    )
++    @ApiResponses(value = {
++            @ApiResponse(responseCode = "200", description = "${api.response.getOk}"),
++            @ApiResponse(
++                    responseCode = "400",
++                    description = "${api.response.getBadRequest}",
++                    content = @Content(
++                            schema = @Schema(implementation = ProblemDetail.class)
++                    )
++            )
++    })
++    @GetMapping
++    public Flux<OrderResponse> getOrdersOfUser(
++            @RequestParam(value = "from", defaultValue = "0")
++            @PositiveOrZero(message = "Страница должна быть >= 0.")
++            int from,
++            @RequestParam(value = "size", defaultValue = "10")
++            @Positive(message = "Размер страницы должен быть > 0.")
++            int size,
++            @RequestParam(value = "sortBy", defaultValue = "date_asc")
++            @NotBlank(message = "Параметр сортировки не должен быть пустым.")
++            String sortBy,
++            @RequestHeader(USER_HEADER) String username) {
++        log.info("Received request to GET orders of user with name={}", username);
++        return menuOrderService.getOrdersOfUser(username, SortBy.fromString(sortBy), from, size);
++    }
+ }

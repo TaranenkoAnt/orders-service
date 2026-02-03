@@ -1,0 +1,283 @@
+Subject: [PATCH] 4_docker_1
+---
+Index: build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build.gradle b/build.gradle
+--- a/build.gradle	(revision 9d2911c50b4ca703a132b768d5e5647b304e1f5e)
++++ b/build.gradle	(revision 5aaa1e99ccec4bbff007d38e53e51a6f95655e2c)
+@@ -53,6 +53,11 @@
+     testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
+ }
+ 
++bootBuildImage {
++    imageName = "${project.name}"
++    environment = ["BP_JVM_VERSION": "17.*"]
++}
++
+ tasks.named('test') {
+     useJUnitPlatform()
+ }
+Index: docker/docker-compose.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker/docker-compose.yml b/docker/docker-compose.yml
+--- a/docker/docker-compose.yml	(revision 9d2911c50b4ca703a132b768d5e5647b304e1f5e)
++++ b/docker/docker-compose.yml	(revision 5aaa1e99ccec4bbff007d38e53e51a6f95655e2c)
+@@ -1,10 +1,53 @@
+ version: "3.8"
+ services:
++  orders-service:
++    image: "orders-service"
++    container_name: "orders-service"
++    depends_on:
++      postgres-orders:
++        condition: service_healthy
++    ports:
++      - "9092:9092"
++    environment:
++      - SPRING_R2DBC_URL=r2dbc:postgresql://postgres-orders:5432/orders_service_db
++      - SPRING_FLYWAY_URL=jdbc:postgresql://postgres-orders:5432/orders_service_db
++      - EXTERNAL_MENU_SERVICE_URL=http://menu-service:9091
++
++  menu-service:
++    image: "menu-service"
++    container_name: "menu-service"
++    depends_on:
++      postgres-menus:
++        condition: service_healthy
++    ports:
++      - "9091:9091"
++    environment:
++      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-menus:5431/menu_service_db
++
++  postgres-menus:
++    image: "postgres:16.1"
++    container_name: "postgres-menus"
++    ports:
++      - "5431:5431"
++    environment:
++      - POSTGRES_USER=user
++      - POSTGRES_PASSWORD=password
++      - POSTGRES_DB=menu_service_db
++      - PGPORT=5431
++    volumes:
++      - db-menus:/var/lib/postgresql/data
++    healthcheck:
++      test: [ "CMD-SHELL", "pg_isready", "-d", "menu_service_db"]
++      interval: 30s
++      timeout: 60s
++      retries: 5
++      start_period: 80s
++
+   postgres-orders:
+     image: "postgres:16.1"
+     container_name: "postgres-orders"
+     ports:
+-      - 5432:5432
++      - "15432:5432"
+     environment:
+       - POSTGRES_USER=user
+       - POSTGRES_PASSWORD=password
+@@ -20,4 +63,6 @@
+ 
+ volumes:
+   db-orders:
++    driver: local
++  db-menus:
+     driver: local
+\ No newline at end of file
+Index: postman/cloud-java-orders-service.postman_collection.json
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/postman/cloud-java-orders-service.postman_collection.json b/postman/cloud-java-orders-service.postman_collection.json
+new file mode 100644
+--- /dev/null	(revision 5aaa1e99ccec4bbff007d38e53e51a6f95655e2c)
++++ b/postman/cloud-java-orders-service.postman_collection.json	(revision 5aaa1e99ccec4bbff007d38e53e51a6f95655e2c)
+@@ -0,0 +1,179 @@
++{
++	"info": {
++		"_postman_id": "724c56ba-72f1-4c17-a056-2cb5960af2b9",
++		"name": "cloud-java-orders-service",
++		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
++		"_exporter_id": "14134951"
++	},
++	"item": [
++		{
++			"name": "create menu one Copy",
++			"request": {
++				"method": "POST",
++				"header": [],
++				"body": {
++					"mode": "raw",
++					"raw": "{\n    \"name\": \"One\",\n    \"description\": \"Nice Item One\",\n    \"price\": 10.10,\n    \"category\": \"drinks\",\n    \"timeToCook\": 1000,\n    \"weight\": 10.20,\n    \"imageUrl\": \"http://images.com/one.png\",\n    \"ingredientCollection\": {\n        \"ingredients\": [\n            {\n                \"name\": \"ingredient one\",\n                \"calories\": 10\n            },\n            {\n                \"name\": \"ingredient two\",\n                \"calories\": 20\n            }\n        ]\n    }\n}",
++					"options": {
++						"raw": {
++							"language": "json"
++						}
++					}
++				},
++				"url": {
++					"raw": "http://localhost:9091/v1/menu-items",
++					"protocol": "http",
++					"host": [
++						"localhost"
++					],
++					"port": "9091",
++					"path": [
++						"v1",
++						"menu-items"
++					]
++				}
++			},
++			"response": []
++		},
++		{
++			"name": "get menu for Category DRINKS Copy",
++			"request": {
++				"method": "GET",
++				"header": [],
++				"url": {
++					"raw": "http://localhost:9091/v1/menu-items?category=DRINKS",
++					"protocol": "http",
++					"host": [
++						"localhost"
++					],
++					"port": "9091",
++					"path": [
++						"v1",
++						"menu-items"
++					],
++					"query": [
++						{
++							"key": "category",
++							"value": "DRINKS"
++						}
++					]
++				}
++			},
++			"response": []
++		},
++		{
++			"name": "get menu not-found Copy",
++			"request": {
++				"method": "GET",
++				"header": [],
++				"url": {
++					"raw": "http://localhost:9091/v1/menu-items/1000",
++					"protocol": "http",
++					"host": [
++						"localhost"
++					],
++					"port": "9091",
++					"path": [
++						"v1",
++						"menu-items",
++						"1000"
++					]
++				}
++			},
++			"response": []
++		},
++		{
++			"name": "create menu two Copy",
++			"request": {
++				"method": "POST",
++				"header": [],
++				"body": {
++					"mode": "raw",
++					"raw": "{\n    \"name\": \"Two\",\n    \"description\": \"Nice Item Two\",\n    \"price\": 10.10,\n    \"category\": \"drinks\",\n    \"timeToCook\": 1000,\n    \"weight\": 20.20,\n    \"imageUrl\": \"http://images.com/two.png\",\n    \"ingredientCollection\": {\n        \"ingredients\": [\n            {\n                \"name\": \"ingredient one\",\n                \"calories\": 10\n            },\n            {\n                \"name\": \"ingredient two\",\n                \"calories\": 20\n            }\n        ]\n    }\n}",
++					"options": {
++						"raw": {
++							"language": "json"
++						}
++					}
++				},
++				"url": {
++					"raw": "http://localhost:9091/v1/menu-items",
++					"protocol": "http",
++					"host": [
++						"localhost"
++					],
++					"port": "9091",
++					"path": [
++						"v1",
++						"menu-items"
++					]
++				}
++			},
++			"response": []
++		},
++		{
++			"name": "create menu three Copy",
++			"request": {
++				"method": "POST",
++				"header": [],
++				"body": {
++					"mode": "raw",
++					"raw": "{\n    \"name\": \"Three\",\n    \"description\": \"Nice Item Three\",\n    \"price\": 10.10,\n    \"category\": \"drinks\",\n    \"timeToCook\": 1000,\n    \"weight\": 30.20,\n    \"imageUrl\": \"http://images.com/three.png\",\n    \"ingredientCollection\": {\n        \"ingredients\": [\n            {\n                \"name\": \"ingredient one\",\n                \"calories\": 10\n            },\n            {\n                \"name\": \"ingredient two\",\n                \"calories\": 20\n            }\n        ]\n    }\n}",
++					"options": {
++						"raw": {
++							"language": "json"
++						}
++					}
++				},
++				"url": {
++					"raw": "http://localhost:9091/v1/menu-items",
++					"protocol": "http",
++					"host": [
++						"localhost"
++					],
++					"port": "9091",
++					"path": [
++						"v1",
++						"menu-items"
++					]
++				}
++			},
++			"response": []
++		},
++		{
++			"name": "Submit order for One Two Three Copy",
++			"request": {
++				"method": "POST",
++				"header": [
++					{
++						"key": "X-User-Name",
++						"value": "Alex",
++						"type": "text"
++					}
++				],
++				"body": {
++					"mode": "raw",
++					"raw": "{\n    \"nameToQuantity\": {\n        \"One\": 10,\n        \"Two\": 20,\n        \"Three\": 30\n    },\n    \"address\": {\n        \"city\": \"Moscow\",\n        \"street\": \"Street\",\n        \"house\": 1,\n        \"apartment\": 1\n    }\n}",
++					"options": {
++						"raw": {
++							"language": "json"
++						}
++					}
++				},
++				"url": {
++					"raw": "http://localhost:9092/v1/menu-orders",
++					"protocol": "http",
++					"host": [
++						"localhost"
++					],
++					"port": "9092",
++					"path": [
++						"v1",
++						"menu-orders"
++					]
++				}
++			},
++			"response": []
++		}
++	]
++}
+\ No newline at end of file

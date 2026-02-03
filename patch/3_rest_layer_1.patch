@@ -1,0 +1,73 @@
+Subject: [PATCH] 3_rest_layer_1
+---
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderController.java b/src/main/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderController.java
+new file mode 100644
+--- /dev/null	(revision de1bade5ca480c24df562c4df10c4e39d422249d)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderController.java	(revision de1bade5ca480c24df562c4df10c4e39d422249d)
+@@ -0,0 +1,21 @@
++package ru.javaops.cloudjava.ordersservice.controller;
++
++import io.swagger.v3.oas.annotations.tags.Tag;
++import lombok.RequiredArgsConstructor;
++import lombok.extern.slf4j.Slf4j;
++import org.springframework.web.bind.annotation.RequestMapping;
++import org.springframework.web.bind.annotation.RestController;
++import ru.javaops.cloudjava.ordersservice.service.MenuOrderService;
++
++@Tag(name = "MenuOrderController", description = "REST API для работы с заказами.")
++@Slf4j
++@RequiredArgsConstructor
++@RestController
++@RequestMapping("/v1/menu-orders")
++public class MenuOrderController {
++
++    public static final String USER_HEADER = "X-User-Name";
++
++    private final MenuOrderService menuOrderService;
++
++}
+Index: src/main/resources/application.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+--- a/src/main/resources/application.yml	(revision c4e8d86fcadd567e53a91afd24ea9583d75441b7)
++++ b/src/main/resources/application.yml	(revision de1bade5ca480c24df562c4df10c4e39d422249d)
+@@ -41,4 +41,28 @@
+   retry-count: 5
+   # фактор неопределенности для того, чтобы минимизировать возможность сценария,
+   # при котором несколько инстансов Orders Service будут одновременно посылать ретраи в Menu Service.
+-  retry-jitter: 0.75
+\ No newline at end of file
++  retry-jitter: 0.75
++
++springdoc:
++  api-docs:
++    path: /api-docs
++  swagger-ui:
++    path: /swagger-ui.html
++
++api:
++  submit-order:
++    summary: Создание заказа пользователем.
++    description: |
++      Создает новый заказ на имя пользователя. 
++      Названия блюд передаются в теле запроса. 
++      В случае отсутствия какого-либо блюда в Menu Service, возвращается 500-ая ошибка.
++  get-orders:
++    summary: Получение списка заказов пользователя.
++    description: Возвращает список заказов пользователя, отсортированный по дате создания заказа.
++  response:
++    submitOk: Заказ успешно сформирован.
++    submitBadRequest: Заказ не был сформирован из-за ошибки в запросе. Подробнее в сообщении об ошибке.
++    submitNotFound: Заказ не был сформирован, так как часть блюд отсутствует в ресторане.
++    submitInternalError: Заказ не был сформирован из-за ошибки на сервере. Подробнее в сообщении об ошибке.
++    getOk: Список заказов пользователя сформирован.
++    getBadRequest: Не удалось сформировать список заказов пользователя из-за ошибки в параметрах запроса.
+\ No newline at end of file

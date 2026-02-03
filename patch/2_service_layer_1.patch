@@ -1,0 +1,513 @@
+Subject: [PATCH] 2_service_layer_1
+---
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/mapper/OrderMapper.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/mapper/OrderMapper.java b/src/main/java/ru/javaops/cloudjava/ordersservice/mapper/OrderMapper.java
+new file mode 100644
+--- /dev/null	(date 1735553966941)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/mapper/OrderMapper.java	(date 1735553966941)
+@@ -0,0 +1,23 @@
++package ru.javaops.cloudjava.ordersservice.mapper;
++
++import org.springframework.stereotype.Component;
++import ru.javaops.cloudjava.ordersservice.dto.CreateOrderRequest;
++import ru.javaops.cloudjava.ordersservice.dto.GetMenuInfoResponse;
++import ru.javaops.cloudjava.ordersservice.dto.OrderResponse;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuOrder;
++
++@Component
++public class OrderMapper {
++
++    public MenuOrder mapToOrder(CreateOrderRequest request,
++                                String username,
++                                GetMenuInfoResponse infoResponse) {
++        // TODO
++        return null;
++    }
++
++    public OrderResponse mapToResponse(MenuOrder order) {
++        // TODO
++        return null;
++    }
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/service/MenuOrderService.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/service/MenuOrderService.java b/src/main/java/ru/javaops/cloudjava/ordersservice/service/MenuOrderService.java
+new file mode 100644
+--- /dev/null	(date 1726771374000)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/service/MenuOrderService.java	(date 1726771374000)
+@@ -0,0 +1,14 @@
++package ru.javaops.cloudjava.ordersservice.service;
++
++import reactor.core.publisher.Flux;
++import reactor.core.publisher.Mono;
++import ru.javaops.cloudjava.ordersservice.dto.CreateOrderRequest;
++import ru.javaops.cloudjava.ordersservice.dto.OrderResponse;
++import ru.javaops.cloudjava.ordersservice.dto.SortBy;
++
++public interface MenuOrderService {
++
++    Mono<OrderResponse> createOrder(CreateOrderRequest request, String username);
++
++    Flux<OrderResponse> getOrdersOfUser(String username, SortBy sortBy, int from, int size);
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImpl.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImpl.java b/src/main/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImpl.java
+new file mode 100644
+--- /dev/null	(date 1735553966941)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImpl.java	(date 1735553966941)
+@@ -0,0 +1,43 @@
++package ru.javaops.cloudjava.ordersservice.service.impl;
++
++import lombok.RequiredArgsConstructor;
++import org.springframework.stereotype.Service;
++import reactor.core.publisher.Flux;
++import reactor.core.publisher.Mono;
++import ru.javaops.cloudjava.ordersservice.client.MenuClient;
++import ru.javaops.cloudjava.ordersservice.dto.CreateOrderRequest;
++import ru.javaops.cloudjava.ordersservice.dto.OrderResponse;
++import ru.javaops.cloudjava.ordersservice.dto.SortBy;
++import ru.javaops.cloudjava.ordersservice.mapper.OrderMapper;
++import ru.javaops.cloudjava.ordersservice.service.MenuOrderService;
++import ru.javaops.cloudjava.ordersservice.storage.repositories.MenuOrderRepository;
++
++@Service
++@RequiredArgsConstructor
++public class MenuOrderServiceImpl implements MenuOrderService {
++
++    private final MenuOrderRepository repository;
++    private final MenuClient menuClient;
++    private final OrderMapper orderMapper;
++
++    @Override
++    public Mono<OrderResponse> createOrder(CreateOrderRequest request, String username) {
++        // TODO
++        // 1. получаем Mono<GetMenuInfoResponse> из Menu Service
++        // 2. маппим полученные данные и входящий запрос на сущность MenuOrder
++        // 3. сохраняем ее в базе и возвращаем Mono<MenuOrder>, чтобы избавиться от
++        // вложенности (Mono<Mono<MenuOrder>>) используем оператор flatMap
++        // 4. маппим MenuOrder на OrderResponse
++        return null;
++    }
++
++    @Override
++    public Flux<OrderResponse> getOrdersOfUser(String username, SortBy sortBy, int from, int size) {
++        // TODO
++        // 1. формируем PageRequest из параметров from, size
++        // 2. применяем сортировку к PageRequest
++        // 3. ищем заказы в базе данных
++        // 4. маппим MenuOrder на OrderResponse
++        return null;
++    }
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/dto/Address.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/dto/Address.java b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/Address.java
+new file mode 100644
+--- /dev/null	(date 1726771374000)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/Address.java	(date 1726771374000)
+@@ -0,0 +1,23 @@
++package ru.javaops.cloudjava.ordersservice.dto;
++
++import jakarta.validation.constraints.NotBlank;
++import jakarta.validation.constraints.Positive;
++import lombok.AllArgsConstructor;
++import lombok.Builder;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++
++@Data
++@AllArgsConstructor
++@NoArgsConstructor
++@Builder
++public class Address {
++    @NotBlank(message = "Название города не может быть пустым.")
++    private String city;
++    @NotBlank(message = "Название улицы не может быть пустым.")
++    private String street;
++    @Positive(message = "Номер дома должен быть > 0")
++    private int house;
++    @Positive(message = "Номер квартиры должен быть > 0")
++    private int apartment;
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/dto/SortBy.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/dto/SortBy.java b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/SortBy.java
+new file mode 100644
+--- /dev/null	(date 1726771374000)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/SortBy.java	(date 1726771374000)
+@@ -0,0 +1,27 @@
++package ru.javaops.cloudjava.ordersservice.dto;
++
++import com.fasterxml.jackson.annotation.JsonCreator;
++import lombok.AllArgsConstructor;
++import lombok.Getter;
++import org.springframework.data.domain.Sort;
++import org.springframework.http.HttpStatus;
++import ru.javaops.cloudjava.ordersservice.exception.OrderServiceException;
++
++@AllArgsConstructor
++public enum SortBy {
++    DATE_ASC(Sort.by(Sort.Direction.ASC, "createdAt")),
++    DATE_DESC(Sort.by(Sort.Direction.DESC, "createdAt"));
++
++    @JsonCreator
++    public static SortBy fromString(String str) {
++        try {
++            return SortBy.valueOf(str.toUpperCase());
++        } catch (IllegalArgumentException e) {
++            var msg = "Failed to create SortBy from string: %s".formatted(str);
++            throw new OrderServiceException(msg, HttpStatus.BAD_REQUEST);
++        }
++    }
++
++    @Getter
++    private final Sort sort;
++}
+\ No newline at end of file
+Index: src/main/resources/application.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+--- a/src/main/resources/application.yml	(revision 07b5ccf95afa2235e9a75899891d90b60ed9a5d9)
++++ b/src/main/resources/application.yml	(date 1735553966961)
+@@ -26,4 +26,19 @@
+   flyway:
+     user: ${spring.r2dbc.username}
+     password: ${spring.r2dbc.password}
+-    url: jdbc:postgresql://localhost:15432/orders_service_db
+\ No newline at end of file
++    url: jdbc:postgresql://localhost:15432/orders_service_db
++
++external:
++  # url для связи с Menu Service
++  menu-service-url: "http://localhost:9091"
++  # путь эндпоинта для получения информации о доступности и ценах блюд
++  menu-info-path: "/v1/menu-items/menu-info"
++  # таймаут, который будет использоваться при связи с Menu Service, чтобы не ожидать ответа вечно
++  default-timeout: 2s
++  # время ожидания перед тем, как совершить повторную попытку получить данные из Menu Service
++  retry-backoff: 100ms
++  # количество повторных попыток связи с Menu Service
++  retry-count: 5
++  # фактор неопределенности для того, чтобы минимизировать возможность сценария,
++  # при котором несколько инстансов Orders Service будут одновременно посылать ретраи в Menu Service.
++  retry-jitter: 0.75
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/dto/CreateOrderRequest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/dto/CreateOrderRequest.java b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/CreateOrderRequest.java
+new file mode 100644
+--- /dev/null	(date 1726771374000)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/CreateOrderRequest.java	(date 1726771374000)
+@@ -0,0 +1,25 @@
++package ru.javaops.cloudjava.ordersservice.dto;
++
++import jakarta.validation.Valid;
++import lombok.AllArgsConstructor;
++import lombok.Builder;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++
++import java.util.Map;
++
++@Data
++@AllArgsConstructor
++@NoArgsConstructor
++@Builder
++public class CreateOrderRequest {
++    /**
++     * Название заказываемого блюда и его количество.
++     */
++    private Map<String, Integer> nameToQuantity;
++    /**
++     * Адрес доставки.
++     */
++    @Valid
++    private Address address;
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/dto/GetMenuInfoRequest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/dto/GetMenuInfoRequest.java b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/GetMenuInfoRequest.java
+new file mode 100644
+--- /dev/null	(date 1726771374000)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/GetMenuInfoRequest.java	(date 1726771374000)
+@@ -0,0 +1,12 @@
++package ru.javaops.cloudjava.ordersservice.dto;
++
++import lombok.AllArgsConstructor;
++import lombok.Data;
++
++import java.util.Set;
++
++@Data
++@AllArgsConstructor
++public class GetMenuInfoRequest {
++    private Set<String> menuNames;
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java b/src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java
+--- a/src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java	(revision 07b5ccf95afa2235e9a75899891d90b60ed9a5d9)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java	(date 1726771374000)
+@@ -2,8 +2,10 @@
+ 
+ import org.springframework.boot.SpringApplication;
+ import org.springframework.boot.autoconfigure.SpringBootApplication;
++import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+ 
+ @SpringBootApplication
++@ConfigurationPropertiesScan
+ public class OrdersServiceApplication {
+ 
+     public static void main(String[] args) {
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java b/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java
+new file mode 100644
+--- /dev/null	(date 1735553959747)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java	(date 1735553959747)
+@@ -0,0 +1,21 @@
++package ru.javaops.cloudjava.ordersservice.config;
++
++import lombok.RequiredArgsConstructor;
++import org.springframework.context.annotation.Bean;
++import org.springframework.context.annotation.Configuration;
++import org.springframework.web.reactive.function.client.WebClient;
++import ru.javaops.cloudjava.ordersservice.config.props.OrderServiceProps;
++
++@RequiredArgsConstructor
++@Configuration
++public class WebClientConfig {
++
++    private final OrderServiceProps props;
++
++    @Bean
++    public WebClient webClient() {
++        return WebClient.builder()
++                .baseUrl(props.getMenuServiceUrl())
++                .build();
++    }
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/config/props/OrderServiceProps.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/config/props/OrderServiceProps.java b/src/main/java/ru/javaops/cloudjava/ordersservice/config/props/OrderServiceProps.java
+new file mode 100644
+--- /dev/null	(date 1726771374000)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/config/props/OrderServiceProps.java	(date 1726771374000)
+@@ -0,0 +1,17 @@
++package ru.javaops.cloudjava.ordersservice.config.props;
++
++import lombok.Data;
++import org.springframework.boot.context.properties.ConfigurationProperties;
++
++import java.time.Duration;
++
++@Data
++@ConfigurationProperties(prefix = "external")
++public class OrderServiceProps {
++    private final String menuServiceUrl;
++    private final String menuInfoPath;
++    private final Duration defaultTimeout;
++    private final Duration retryBackoff;
++    private final int retryCount;
++    private final double retryJitter;
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/client/MenuClient.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/client/MenuClient.java b/src/main/java/ru/javaops/cloudjava/ordersservice/client/MenuClient.java
+new file mode 100644
+--- /dev/null	(date 1726771374000)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/client/MenuClient.java	(date 1726771374000)
+@@ -0,0 +1,67 @@
++package ru.javaops.cloudjava.ordersservice.client;
++
++import lombok.RequiredArgsConstructor;
++import org.springframework.http.HttpStatus;
++import org.springframework.http.HttpStatusCode;
++import org.springframework.http.MediaType;
++import org.springframework.stereotype.Component;
++import org.springframework.web.reactive.function.client.WebClient;
++import reactor.core.publisher.Mono;
++import reactor.util.retry.Retry;
++import ru.javaops.cloudjava.ordersservice.config.props.OrderServiceProps;
++import ru.javaops.cloudjava.ordersservice.dto.GetMenuInfoRequest;
++import ru.javaops.cloudjava.ordersservice.dto.GetMenuInfoResponse;
++import ru.javaops.cloudjava.ordersservice.exception.OrderServiceException;
++
++import java.util.concurrent.TimeoutException;
++
++@Component
++@RequiredArgsConstructor
++public class MenuClient {
++
++    private final WebClient webClient;
++    private final OrderServiceProps props;
++
++    public Mono<GetMenuInfoResponse> getMenuInfo(GetMenuInfoRequest request) {
++        return webClient
++                .post()
++                .uri(props.getMenuInfoPath())
++                .contentType(MediaType.APPLICATION_JSON)
++                .bodyValue(request)
++                .retrieve()
++                // при получении 500 ответа от Menu Service пробрасываем дальше исключение
++                // со статусом SERVICE_UNAVAILABLE
++                .onStatus(HttpStatusCode::is5xxServerError, response ->
++                        Mono.error(new OrderServiceException("Menu Service Unavailable", HttpStatus.SERVICE_UNAVAILABLE)))
++                .bodyToMono(GetMenuInfoResponse.class)
++                // таймаут на получение данных от Menu Service. Если с сервисом не удается
++                // установить соединение или данные не приходят в течение указанного времени,
++                // то выбрасывается java.util.concurrent.TimeoutException
++                .timeout(props.getDefaultTimeout())
++                // если оператор retryWhen стоит после оператора timeout, то тогда таймаут
++                // применяется к каждой повторной попытке отправить запрос, если поменять их
++                // местами, то таймаут будет один на первую попытку запроса и на все ретраи.
++                .retryWhen(
++                        // указываем, что интервалы между повторными попытками запросов должны расти
++                        // экспоненциально. Такой подход повысит шансы Menu Service на
++                        // успешное восстановление.
++                        Retry.backoff(props.getRetryCount(), props.getRetryBackoff())
++                                // вносим фактор неопределенности, чтобы разные инстансы Orders Service
++                                // не посылали повторные попытки одновременно
++                                .jitter(props.getRetryJitter())
++                                // повторные попытки будут посылаться только в случае OrderServiceException,
++                                // которое выбрасывается, как выше указано, при получении 500 ответа от Menu Service и
++                                // java.util.concurrent.TimeoutException, которое выбрасывается при
++                                // наступлении таймаута
++                                .filter(t -> {
++                                    return t instanceof OrderServiceException || t instanceof TimeoutException;
++                                })
++                                // когда все повторные попытки отправить запрос исчерпаны, выбрасываем
++                                // OrderServiceException со статусом SERVICE_UNAVAILABLE.
++                                .onRetryExhaustedThrow(((retryBackoffSpec, retrySignal) -> {
++                                    var msg = "Failed to fetch info from Menu Service after max retry attempts";
++                                    throw new OrderServiceException(msg, HttpStatus.SERVICE_UNAVAILABLE);
++                                }))
++                );
++    }
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/dto/MenuInfo.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/dto/MenuInfo.java b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/MenuInfo.java
+new file mode 100644
+--- /dev/null	(date 1735553986640)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/MenuInfo.java	(date 1735553986640)
+@@ -0,0 +1,17 @@
++package ru.javaops.cloudjava.ordersservice.dto;
++
++import lombok.*;
++
++import java.math.BigDecimal;
++
++@AllArgsConstructor
++@NoArgsConstructor
++@EqualsAndHashCode
++@Getter
++@Setter
++@ToString
++public class MenuInfo {
++    private String name;
++    private BigDecimal price;
++    private Boolean isAvailable;
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/dto/GetMenuInfoResponse.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/dto/GetMenuInfoResponse.java b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/GetMenuInfoResponse.java
+new file mode 100644
+--- /dev/null	(date 1726771374000)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/GetMenuInfoResponse.java	(date 1726771374000)
+@@ -0,0 +1,16 @@
++package ru.javaops.cloudjava.ordersservice.dto;
++
++import lombok.AllArgsConstructor;
++import lombok.Builder;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++
++import java.util.List;
++
++@Data
++@Builder
++@AllArgsConstructor
++@NoArgsConstructor
++public class GetMenuInfoResponse {
++    private List<MenuInfo> menuInfos;
++}
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/dto/OrderResponse.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/dto/OrderResponse.java b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/OrderResponse.java
+new file mode 100644
+--- /dev/null	(date 1726771374000)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/dto/OrderResponse.java	(date 1726771374000)
+@@ -0,0 +1,25 @@
++package ru.javaops.cloudjava.ordersservice.dto;
++
++import lombok.AllArgsConstructor;
++import lombok.Builder;
++import lombok.Data;
++import lombok.NoArgsConstructor;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuLineItem;
++import ru.javaops.cloudjava.ordersservice.storage.model.OrderStatus;
++
++import java.math.BigDecimal;
++import java.time.LocalDateTime;
++import java.util.List;
++
++@Data
++@AllArgsConstructor
++@NoArgsConstructor
++@Builder
++public class OrderResponse {
++    private Long orderId;
++    private BigDecimal totalPrice;
++    private List<MenuLineItem> menuLineItems;
++    private Address address;
++    private OrderStatus status;
++    private LocalDateTime createdAt;
++}
