@@ -1,0 +1,145 @@
+Subject: [PATCH] 11_kafka_integration_1_PHW
+---
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListener.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListener.java b/src/main/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListener.java
+new file mode 100644
+--- /dev/null	(date 1731074131975)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListener.java	(date 1731074131975)
+@@ -0,0 +1,18 @@
++package ru.javaops.cloudjava.ordersservice.kafka;
++
++import lombok.RequiredArgsConstructor;
++import lombok.extern.slf4j.Slf4j;
++import org.springframework.stereotype.Component;
++import ru.javaops.cloudjava.ordersservice.storage.repositories.MenuOrderRepository;
++
++@Slf4j
++@Component
++@RequiredArgsConstructor
++public class KafkaOrderDispatchListener {
++
++    private final MenuOrderRepository menuOrderRepository;
++
++    // TODO
++    public void consumeOrderDispatchEvent() {
++    }
++}
+\ No newline at end of file
+Index: build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build.gradle b/build.gradle
+--- a/build.gradle	(revision 7ba5d0bc2a6fa913836fe713c7938e64e6f8bdac)
++++ b/build.gradle	(date 1731250614594)
+@@ -2,6 +2,7 @@
+     id 'java'
+     id 'org.springframework.boot' version '3.2.5'
+     id 'io.spring.dependency-management' version '1.1.5'
++    id 'com.github.davidmc24.gradle.plugin.avro' version '1.9.1'
+ }
+ 
+ group = 'ru.javaops.cloudjava'
+@@ -23,12 +24,17 @@
+ 
+ repositories {
+     mavenCentral()
++    maven {
++        url = "https://packages.confluent.io/maven/"
++    }
+ }
+ 
+ ext {
+     wiremockVersion = '3.2.0'
+     springdocVersion = '2.5.0'
+     springCloudVersion = '2023.0.1'
++    avroSerializerVersion = '7.6.0'
++    avroVersion = '1.11.3'
+ }
+ 
+ dependencies {
+@@ -40,6 +46,9 @@
+     implementation 'org.postgresql:r2dbc-postgresql'
+     implementation 'org.springframework.cloud:spring-cloud-starter-config'
+     implementation 'org.springframework.retry:spring-retry'
++    implementation 'org.springframework.kafka:spring-kafka'
++    implementation "io.confluent:kafka-avro-serializer:${avroSerializerVersion}"
++    implementation "org.apache.avro:avro:${avroVersion}"
+     compileOnly 'org.projectlombok:lombok'
+     runtimeOnly 'org.flywaydb:flyway-core'
+     runtimeOnly 'org.postgresql:postgresql'
+@@ -69,4 +78,4 @@
+ 
+ tasks.named('test') {
+     useJUnitPlatform()
+-}
++}
+\ No newline at end of file
+Index: src/main/avro/order-dispatched.avsc
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/avro/order-dispatched.avsc b/src/main/avro/order-dispatched.avsc
+new file mode 100644
+--- /dev/null	(date 1731240425149)
++++ b/src/main/avro/order-dispatched.avsc	(date 1731240425149)
+@@ -0,0 +1,22 @@
++{
++  "type": "record",
++  "name": "OrderDispatchedEvent",
++  "namespace": "ru.javaops.cloudjava",
++  "fields": [
++    {
++      "name": "orderId",
++      "type": "long"
++    },
++    {
++      "name": "status",
++      "type": {
++        "type": "enum",
++        "name": "OrderDispatchStatus",
++        "symbols": [
++          "ACCEPTED",
++          "REJECTED"
++        ]
++      }
++    }
++  ]
++}
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderStatus.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderStatus.java b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderStatus.java
+--- a/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderStatus.java	(revision 7ba5d0bc2a6fa913836fe713c7938e64e6f8bdac)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/storage/model/OrderStatus.java	(date 1731074063622)
+@@ -1,7 +1,19 @@
+ package ru.javaops.cloudjava.ordersservice.storage.model;
+ 
++import org.springframework.http.HttpStatus;
++import ru.javaops.cloudjava.ordersservice.exception.OrderServiceException;
++
+ public enum OrderStatus {
+     NEW,
+     ACCEPTED,
+-    REJECTED
++    REJECTED;
++
++    public static OrderStatus fromString(String str) {
++        try {
++            return OrderStatus.valueOf(str.toUpperCase());
++        } catch (IllegalArgumentException e) {
++            var msg = "Failed to create OrderStatus from string: %s".formatted(str);
++            throw new OrderServiceException(msg, HttpStatus.INTERNAL_SERVER_ERROR);
++        }
++    }
+ }
+\ No newline at end of file

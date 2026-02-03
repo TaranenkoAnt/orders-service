@@ -1,0 +1,122 @@
+Subject: [PATCH] 14_monitoring
+---
+Index: build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build.gradle b/build.gradle
+--- a/build.gradle	(revision 2d4f66a7c26dd4e9e351bc626adc6994a52b466b)
++++ b/build.gradle	(revision 630d29db9b416847368e7b23c3681a845516653b)
+@@ -36,6 +36,7 @@
+     avroSerializerVersion = '7.6.0'
+     avroVersion = '1.11.3'
+     awaitilityVersion = '4.2.1'
++    lokiAppenderVersion = '1.5.1'
+ }
+ 
+ dependencies {
+@@ -57,6 +58,8 @@
+     runtimeOnly 'org.flywaydb:flyway-core'
+     runtimeOnly 'org.postgresql:postgresql'
+     runtimeOnly 'org.springframework:spring-jdbc'
++    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
++    runtimeOnly "com.github.loki4j:loki-logback-appender:${lokiAppenderVersion}"
+     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+     annotationProcessor 'org.projectlombok:lombok'
+     testImplementation 'org.springframework.boot:spring-boot-starter-test'
+Index: src/main/resources/application.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+--- a/src/main/resources/application.yml	(revision 2d4f66a7c26dd4e9e351bc626adc6994a52b466b)
++++ b/src/main/resources/application.yml	(revision 630d29db9b416847368e7b23c3681a845516653b)
+@@ -41,7 +41,7 @@
+         initial-interval: 1000
+         max-interval: 2000
+         multiplier: 1.1
+-      label: gateway_service
++      label: monitoring
+ 
+   kafka:
+     bootstrap-servers: localhost:9097
+@@ -91,6 +91,7 @@
+   # при котором несколько инстансов Orders Service будут одновременно посылать ретраи в Menu Service.
+   retry-jitter: 0.75
+   zipkin-endpoint: http://localhost:9411/api/v2/spans
++  loki-url: http://localhost:3100/loki/api/v1/push
+ 
+ management:
+   endpoints:
+@@ -106,6 +107,12 @@
+   zipkin:
+     tracing:
+       endpoint: ${external.zipkin-endpoint}
++  metrics:
++    tags:
++      application: ${spring.application.name}
++    distribution:
++      percentiles-histogram:
++        all: true
+ 
+ springdoc:
+   api-docs:
+Index: src/main/resources/logback-spring.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/logback-spring.xml b/src/main/resources/logback-spring.xml
+new file mode 100644
+--- /dev/null	(revision 630d29db9b416847368e7b23c3681a845516653b)
++++ b/src/main/resources/logback-spring.xml	(revision 630d29db9b416847368e7b23c3681a845516653b)
+@@ -0,0 +1,27 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<configuration>
++    <include resource="org/springframework/boot/logging/logback/base.xml" />
++    <springProperty scope="context" name="appName" source="spring.application.name"/>
++    <springProperty scope="context" name="lokiUri" source="external.loki-url"/>
++
++    <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
++        <batchTimeoutMs>2000</batchTimeoutMs>
++        <http>
++            <url>${lokiUri}</url>
++        </http>
++        <format>
++            <label>
++                <pattern>application=${appName},hostname=${HOSTNAME},level=%level</pattern>
++            </label>
++            <message>
++                <pattern>${FILE_LOG_PATTERN}</pattern>
++            </message>
++            <sortByTime>true</sortByTime>
++        </format>
++        <metricsEnabled>true</metricsEnabled>
++    </appender>
++
++    <root level="INFO">
++        <appender-ref ref="LOKI"/>
++    </root>
++</configuration>
+\ No newline at end of file
+Index: src/test/resources/logback-test.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/resources/logback-test.xml b/src/test/resources/logback-test.xml
+new file mode 100644
+--- /dev/null	(revision 630d29db9b416847368e7b23c3681a845516653b)
++++ b/src/test/resources/logback-test.xml	(revision 630d29db9b416847368e7b23c3681a845516653b)
+@@ -0,0 +1,8 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<configuration>
++    <include resource="org/springframework/boot/logging/logback/base.xml" />
++
++    <root level="INFO">
++        <appender-ref ref="CONSOLE"/>
++    </root>
++</configuration>
+\ No newline at end of file

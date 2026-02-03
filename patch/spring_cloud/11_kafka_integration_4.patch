@@ -1,0 +1,68 @@
+Subject: [PATCH] 11_kafka_integration_4
+---
+Index: src/main/resources/application.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+--- a/src/main/resources/application.yml	(revision 9dd50c9b9f6941bc0ceced86c86e0b26bb200b3c)
++++ b/src/main/resources/application.yml	(date 1731266818986)
+@@ -41,6 +41,7 @@
+         initial-interval: 1000
+         max-interval: 2000
+         multiplier: 1.1
++      label: kafka_integration
+ 
+   kafka:
+     bootstrap-servers: localhost:9097
+Index: docker/docker-compose.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker/docker-compose.yml b/docker/docker-compose.yml
+--- a/docker/docker-compose.yml	(revision 9dd50c9b9f6941bc0ceced86c86e0b26bb200b3c)
++++ b/docker/docker-compose.yml	(date 1731268395999)
+@@ -34,6 +34,23 @@
+       - DB_URL=${ORDERS_DB_URL}
+       - FLYWAY_DB_URL=${ORDERS_DB_FLYWAY_URL}
+       - MENU_SERVICE_URL=${MENU_SERVICE_URL}
++      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
++      - SCHEMA_REGISTRY_URL=${SCHEMA_REGISTRY_URL}
++
++  dispatcher-service:
++    image: "dispatcher-service"
++    container_name: "dispatcher-service"
++    depends_on:
++      config-server:
++        condition: service_healthy
++    ports:
++      - "9096:9096"
++    environment:
++      - CONFIGSERVER_IMPORT=configserver:${CONFIG_SERVER_URL}
++      - SPRING_CLOUD_CONFIG_FAIL_FAST=true
++      - SPRING_PROFILES_ACTIVE=prod
++      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
++      - SCHEMA_REGISTRY_URL=${SCHEMA_REGISTRY_URL}
+ 
+   menu-service:
+     image: "menu-service"
+Index: docker/read_topics.sh
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker/read_topics.sh b/docker/read_topics.sh
+--- a/docker/read_topics.sh	(revision 9dd50c9b9f6941bc0ceced86c86e0b26bb200b3c)
++++ b/docker/read_topics.sh	(date 1731267652550)
+@@ -7,4 +7,7 @@
+ echo -e "\n*** Sampling messages in Kafka topics ***\n"
+ 
+ echo -e "\n-----v1.public.orders_outbox topic-----"
+-docker compose exec connect kafka-avro-console-consumer --bootstrap-server $BOOTSTRAP_SERVERS --property schema.registry.url=$SCHEMA_REGISTRY_URL --from-beginning --timeout-ms 10000 --max-messages 5 --topic v1.public.orders_outbox
+\ No newline at end of file
++docker compose exec connect kafka-avro-console-consumer --bootstrap-server $BOOTSTRAP_SERVERS --property schema.registry.url=$SCHEMA_REGISTRY_URL --from-beginning --timeout-ms 10000 --max-messages 5 --topic v1.public.orders_outbox
++
++echo -e "\n-----v1.orders_dispatch topic-----"
++docker compose exec connect kafka-avro-console-consumer --bootstrap-server $BOOTSTRAP_SERVERS --property schema.registry.url=$SCHEMA_REGISTRY_URL --from-beginning --timeout-ms 10000 --max-messages 5 --topic v1.orders_dispatch

@@ -1,0 +1,180 @@
+Subject: [PATCH] 12_service_discovery_1
+---
+Index: docker/docker-compose.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker/docker-compose.yml b/docker/docker-compose.yml
+--- a/docker/docker-compose.yml	(revision bf667613cb1c6ca656763f0da2aa452fb8c56a0f)
++++ b/docker/docker-compose.yml	(date 1733334129652)
+@@ -33,9 +33,9 @@
+       - DB_PASSWORD=${POSTGRES_DB_PASSWORD}
+       - DB_URL=${ORDERS_DB_URL}
+       - FLYWAY_DB_URL=${ORDERS_DB_FLYWAY_URL}
+-      - MENU_SERVICE_URL=${MENU_SERVICE_URL}
+       - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
+       - SCHEMA_REGISTRY_URL=${SCHEMA_REGISTRY_URL}
++      - DISCOVERY_SERVICE_URL=${DISCOVERY_SERVICE_URL}
+ 
+   dispatcher-service:
+     image: "dispatcher-service"
+@@ -69,6 +69,21 @@
+       - DB_USER=${POSTGRES_DB_USER}
+       - DB_PASSWORD=${POSTGRES_DB_PASSWORD}
+       - DB_URL=${MENU_DB_URL}
++      - DISCOVERY_SERVICE_URL=${DISCOVERY_SERVICE_URL}
++
++  discovery-service:
++    image: "discovery-service"
++    container_name: "discovery-service"
++    ports:
++      - "8761:8761"
++    depends_on:
++      config-server:
++        condition: service_healthy
++    environment:
++      - CONFIGSERVER_IMPORT=configserver:${CONFIG_SERVER_URL}
++      - SPRING_CLOUD_CONFIG_FAIL_FAST=true
++      - SPRING_PROFILES_ACTIVE=prod
++      - EUREKA_HOSTNAME=discovery-service
+ 
+   postgres:
+     image: "postgres:16.1"
+Index: build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build.gradle b/build.gradle
+--- a/build.gradle	(revision bf667613cb1c6ca656763f0da2aa452fb8c56a0f)
++++ b/build.gradle	(date 1733333186701)
+@@ -50,6 +50,7 @@
+     implementation 'org.springframework.kafka:spring-kafka'
+     implementation "io.confluent:kafka-avro-serializer:${avroSerializerVersion}"
+     implementation "org.apache.avro:avro:${avroVersion}"
++    implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+     compileOnly 'org.projectlombok:lombok'
+     runtimeOnly 'org.flywaydb:flyway-core'
+     runtimeOnly 'org.postgresql:postgresql'
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java	(revision bf667613cb1c6ca656763f0da2aa452fb8c56a0f)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseTest.java	(date 1733333317702)
+@@ -32,6 +32,8 @@
+         System.setProperty("spring.r2dbc.password", container.getPassword());
+         System.setProperty("spring.flyway.url", container.getJdbcUrl());
+         System.setProperty("external.default-timeout", DEFAULT_TIMEOUT_STR);
++        System.setProperty("eureka.client.enabled", "false");
++        System.setProperty("spring.cloud.loadbalancer.enabled", "false");
+     }
+ 
+     @BeforeEach
+Index: src/main/resources/application.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+--- a/src/main/resources/application.yml	(revision bf667613cb1c6ca656763f0da2aa452fb8c56a0f)
++++ b/src/main/resources/application.yml	(date 1733335483906)
+@@ -41,7 +41,7 @@
+         initial-interval: 1000
+         max-interval: 2000
+         multiplier: 1.1
+-      label: kafka_integration
++      label: discovery_service
+ 
+   kafka:
+     bootstrap-servers: localhost:9097
+@@ -57,6 +57,17 @@
+     listener:
+       ack-mode: manual
+ 
++eureka:
++  client:
++    service-url:
++      defaultZone: ${external.discovery-service-url}
++    registry-fetch-interval-seconds: 5
++    initial-instance-info-replication-interval-seconds: 5
++  instance:
++    lease-renewal-interval-in-seconds: 5
++    lease-expiration-duration-in-seconds: 5
++    prefer-ip-address: true
++
+ configserver:
+   import: optional:configserver:${CONFIG_SERVER_URL:http://localhost:9095}
+ 
+@@ -65,8 +76,9 @@
+   nack-sleep-duration: 100ms
+ 
+ external:
++  discovery-service-url: http://localhost:8761/eureka/
+   # url для связи с Menu Service
+-  menu-service-url: "http://localhost:9091"
++  menu-service-url: "http://menu-service"
+   # путь эндпоинта для получения информации о доступности и ценах блюд
+   menu-info-path: "/v1/menu-items/menu-info"
+   # таймаут, который будет использоваться при связи с Menu Service, чтобы не ожидать ответа вечно
+Index: docker/.env
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docker/.env b/docker/.env
+--- a/docker/.env	(revision bf667613cb1c6ca656763f0da2aa452fb8c56a0f)
++++ b/docker/.env	(date 1733333731867)
+@@ -1,5 +1,4 @@
+ CONFIG_SERVER_URL=http://config-server:9095
+-MENU_SERVICE_URL=http://menu-service:9091
+ 
+ POSTGRES_DB_USER=user
+ POSTGRES_DB_PASSWORD=password
+@@ -16,3 +15,5 @@
+ 
+ SCHEMA_REGISTRY_URL=http://schema-registry:8081
+ SCHEMA_REGISTRY_LISTENERS=http://0.0.0.0:8081
++
++DISCOVERY_SERVICE_URL=http://discovery-service:8761/eureka
+\ No newline at end of file
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java b/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java
+--- a/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java	(revision bf667613cb1c6ca656763f0da2aa452fb8c56a0f)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java	(date 1733333186712)
+@@ -1,6 +1,7 @@
+ package ru.javaops.cloudjava.ordersservice.config;
+ 
+ import lombok.RequiredArgsConstructor;
++import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+ import org.springframework.context.annotation.Bean;
+ import org.springframework.context.annotation.Configuration;
+ import org.springframework.web.reactive.function.client.WebClient;
+@@ -12,10 +13,16 @@
+ 
+     private final OrderServiceProps props;
+ 
++    @LoadBalanced
+     @Bean
+-    public WebClient webClient() {
+-        return WebClient.builder()
++    public WebClient.Builder loadBalancedWebClientBuilder() {
++        return WebClient.builder();
++    }
++
++    @Bean
++    public WebClient webClient(WebClient.Builder loadBalancedWebClientBuilder) {
++        return loadBalancedWebClientBuilder
+                 .baseUrl(props.getMenuServiceUrl())
+                 .build();
+     }
+-}
++}
+\ No newline at end of file

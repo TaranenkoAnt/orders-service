@@ -1,0 +1,218 @@
+Subject: [PATCH] 13_distributed_tracing
+---
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListenerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListenerTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListenerTest.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListenerTest.java	(revision 56286fdfa47186666a1b16e894f46354e719c247)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListenerTest.java	(date 1736289784681)
+@@ -5,7 +5,9 @@
+ import org.junit.jupiter.api.Test;
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.boot.test.context.SpringBootTest;
++import org.springframework.context.annotation.Import;
+ import org.springframework.kafka.core.KafkaTemplate;
++import org.springframework.test.context.ActiveProfiles;
+ import org.testcontainers.containers.KafkaContainer;
+ import org.testcontainers.containers.Network;
+ import org.testcontainers.utility.DockerImageName;
+@@ -13,6 +15,7 @@
+ import ru.javaops.cloudjava.OrderDispatchedEvent;
+ import ru.javaops.cloudjava.ordersservice.BaseTest;
+ import ru.javaops.cloudjava.ordersservice.SchemaRegistryContainer;
++import ru.javaops.cloudjava.ordersservice.TestWebClientConfig;
+ import ru.javaops.cloudjava.ordersservice.storage.model.MenuOrder;
+ import ru.javaops.cloudjava.ordersservice.storage.model.OrderStatus;
+ import ru.javaops.cloudjava.ordersservice.storage.repositories.MenuOrderRepository;
+@@ -21,6 +24,8 @@
+ 
+ import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
+ 
++@ActiveProfiles("test")
++@Import(TestWebClientConfig.class)
+ @SpringBootTest
+ class KafkaOrderDispatchListenerTest extends BaseTest {
+ 
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/TestWebClientConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/TestWebClientConfig.java b/src/test/java/ru/javaops/cloudjava/ordersservice/TestWebClientConfig.java
+new file mode 100644
+--- /dev/null	(date 1736342466035)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/TestWebClientConfig.java	(date 1736342466035)
+@@ -0,0 +1,21 @@
++package ru.javaops.cloudjava.ordersservice;
++
++import org.springframework.boot.test.context.TestConfiguration;
++import org.springframework.context.annotation.Bean;
++import org.springframework.web.reactive.function.client.WebClient;
++import ru.javaops.cloudjava.ordersservice.config.props.OrderServiceProps;
++
++@TestConfiguration
++public class TestWebClientConfig {
++
++    private final OrderServiceProps props;
++
++    public TestWebClientConfig(OrderServiceProps props) {
++        this.props = props;
++    }
++
++    @Bean
++    public WebClient webClient(WebClient.Builder builder) {
++        return builder.baseUrl(props.getMenuServiceUrl()).build();
++    }
++}
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/BaseIntegrationTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/BaseIntegrationTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseIntegrationTest.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/BaseIntegrationTest.java	(revision 56286fdfa47186666a1b16e894f46354e719c247)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/BaseIntegrationTest.java	(date 1736289638088)
+@@ -3,6 +3,8 @@
+ import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+ import org.junit.jupiter.api.extension.RegisterExtension;
+ import org.springframework.boot.test.context.SpringBootTest;
++import org.springframework.context.annotation.Import;
++import org.springframework.test.context.ActiveProfiles;
+ import org.springframework.test.context.DynamicPropertyRegistry;
+ import org.springframework.test.context.DynamicPropertySource;
+ 
+@@ -13,7 +15,9 @@
+ import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.readPartiallySuccessfulResponse;
+ import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.readSuccessfulResponse;
+ 
++@ActiveProfiles("test")
+ @SpringBootTest
++@Import(TestWebClientConfig.class)
+ public class BaseIntegrationTest extends BaseTest {
+ 
+     @RegisterExtension
+Index: build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build.gradle b/build.gradle
+--- a/build.gradle	(revision 56286fdfa47186666a1b16e894f46354e719c247)
++++ b/build.gradle	(date 1736176330632)
+@@ -51,6 +51,8 @@
+     implementation "io.confluent:kafka-avro-serializer:${avroSerializerVersion}"
+     implementation "org.apache.avro:avro:${avroVersion}"
+     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
++    implementation 'io.micrometer:micrometer-tracing-bridge-brave'
++    implementation 'io.zipkin.reporter2:zipkin-reporter-brave'
+     compileOnly 'org.projectlombok:lombok'
+     runtimeOnly 'org.flywaydb:flyway-core'
+     runtimeOnly 'org.postgresql:postgresql'
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java b/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java
+--- a/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java	(revision 56286fdfa47186666a1b16e894f46354e719c247)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/config/WebClientConfig.java	(date 1736292889119)
+@@ -1,27 +1,25 @@
+ package ru.javaops.cloudjava.ordersservice.config;
+ 
+ import lombok.RequiredArgsConstructor;
+-import org.springframework.cloud.client.loadbalancer.LoadBalanced;
++import org.springframework.cloud.client.loadbalancer.reactive.ReactorLoadBalancerExchangeFilterFunction;
+ import org.springframework.context.annotation.Bean;
+ import org.springframework.context.annotation.Configuration;
++import org.springframework.context.annotation.Profile;
+ import org.springframework.web.reactive.function.client.WebClient;
+ import ru.javaops.cloudjava.ordersservice.config.props.OrderServiceProps;
+ 
+ @RequiredArgsConstructor
+ @Configuration
++@Profile("!test")
+ public class WebClientConfig {
+ 
+     private final OrderServiceProps props;
++    private final ReactorLoadBalancerExchangeFilterFunction lbFunction;
+ 
+-    @LoadBalanced
+     @Bean
+-    public WebClient.Builder loadBalancedWebClientBuilder() {
+-        return WebClient.builder();
+-    }
+-
+-    @Bean
+-    public WebClient webClient(WebClient.Builder loadBalancedWebClientBuilder) {
+-        return loadBalancedWebClientBuilder
++    public WebClient webClient(WebClient.Builder builder) {
++        return builder
++                .filter(lbFunction)
+                 .baseUrl(props.getMenuServiceUrl())
+                 .build();
+     }
+Index: src/main/resources/application.yml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yml b/src/main/resources/application.yml
+--- a/src/main/resources/application.yml	(revision 56286fdfa47186666a1b16e894f46354e719c247)
++++ b/src/main/resources/application.yml	(date 1736176376816)
+@@ -41,7 +41,7 @@
+         initial-interval: 1000
+         max-interval: 2000
+         multiplier: 1.1
+-      label: discovery_service
++      label: gateway_service
+ 
+   kafka:
+     bootstrap-servers: localhost:9097
+@@ -90,6 +90,22 @@
+   # фактор неопределенности для того, чтобы минимизировать возможность сценария,
+   # при котором несколько инстансов Orders Service будут одновременно посылать ретраи в Menu Service.
+   retry-jitter: 0.75
++  zipkin-endpoint: http://localhost:9411/api/v2/spans
++
++management:
++  endpoints:
++    web:
++      exposure:
++        include: "*"
++  tracing:
++    enabled: true
++    sampling:
++      probability: 1.0
++    propagation:
++      type: b3
++  zipkin:
++    tracing:
++      endpoint: ${external.zipkin-endpoint}
+ 
+ springdoc:
+   api-docs:
+Index: src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java b/src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java
+--- a/src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java	(revision 56286fdfa47186666a1b16e894f46354e719c247)
++++ b/src/main/java/ru/javaops/cloudjava/ordersservice/OrdersServiceApplication.java	(date 1736176330642)
+@@ -3,12 +3,14 @@
+ import org.springframework.boot.SpringApplication;
+ import org.springframework.boot.autoconfigure.SpringBootApplication;
+ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
++import reactor.core.publisher.Hooks;
+ 
+ @SpringBootApplication
+ @ConfigurationPropertiesScan
+ public class OrdersServiceApplication {
+ 
+     public static void main(String[] args) {
++        Hooks.enableAutomaticContextPropagation();
+         SpringApplication.run(OrdersServiceApplication.class, args);
+     }
+ }

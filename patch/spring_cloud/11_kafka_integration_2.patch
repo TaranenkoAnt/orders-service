@@ -1,0 +1,213 @@
+Subject: [PATCH] 11_kafka_integration_2
+---
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java	(revision da614ce28a4f4668a0841be5ff6ee478341f87d6)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/controller/MenuOrderControllerTest.java	(date 1731250928024)
+@@ -2,6 +2,8 @@
+ 
+ import org.junit.jupiter.api.Test;
+ import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
++import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
+ import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
+ import org.springframework.http.MediaType;
+ import org.springframework.test.web.reactive.server.WebTestClient;
+@@ -17,6 +19,7 @@
+ import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.*;
+ 
+ @AutoConfigureWebTestClient(timeout = "20000")
++@EnableAutoConfiguration(exclude = {KafkaAutoConfiguration.class})
+ class MenuOrderControllerTest extends BaseIntegrationTest {
+ 
+     @Autowired
+Index: build.gradle
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/build.gradle b/build.gradle
+--- a/build.gradle	(revision da614ce28a4f4668a0841be5ff6ee478341f87d6)
++++ b/build.gradle	(date 1731250882874)
+@@ -35,6 +35,7 @@
+     springCloudVersion = '2023.0.1'
+     avroSerializerVersion = '7.6.0'
+     avroVersion = '1.11.3'
++    awaitilityVersion = '4.2.1'
+ }
+ 
+ dependencies {
+@@ -63,6 +64,9 @@
+     testImplementation 'org.testcontainers:r2dbc'
+     testImplementation 'com.squareup.okhttp3:mockwebserver'
+     testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
++    testImplementation 'org.testcontainers:kafka'
++    testImplementation 'org.springframework.kafka:spring-kafka-test'
++    testImplementation "org.awaitility:awaitility:${awaitilityVersion}"
+ }
+ 
+ dependencyManagement {
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImplTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImplTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImplTest.java
+--- a/src/test/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImplTest.java	(revision da614ce28a4f4668a0841be5ff6ee478341f87d6)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/service/impl/MenuOrderServiceImplTest.java	(date 1731250928028)
+@@ -2,6 +2,8 @@
+ 
+ import org.junit.jupiter.api.Test;
+ import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
++import org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration;
+ import reactor.core.publisher.Flux;
+ import reactor.core.publisher.Mono;
+ import reactor.test.StepVerifier;
+@@ -17,12 +19,14 @@
+ import java.util.ArrayList;
+ import java.util.Comparator;
+ 
+-import static com.github.tomakehurst.wiremock.client.WireMock.*;
++import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
++import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+ import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
+ import static ru.javaops.cloudjava.ordersservice.testdata.TestConstants.*;
+ import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.createOrderRequest;
+ import static ru.javaops.cloudjava.ordersservice.testdata.TestDataProvider.existingItems;
+ 
++@EnableAutoConfiguration(exclude = {KafkaAutoConfiguration.class})
+ class MenuOrderServiceImplTest extends BaseIntegrationTest {
+ 
+     @Autowired
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListenerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListenerTest.java b/src/test/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListenerTest.java
+new file mode 100644
+--- /dev/null	(date 1731250882879)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/kafka/KafkaOrderDispatchListenerTest.java	(date 1731250882879)
+@@ -0,0 +1,77 @@
++package ru.javaops.cloudjava.ordersservice.kafka;
++
++import org.awaitility.Awaitility;
++import org.junit.jupiter.api.BeforeAll;
++import org.junit.jupiter.api.Test;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.boot.test.context.SpringBootTest;
++import org.springframework.kafka.core.KafkaTemplate;
++import org.testcontainers.containers.KafkaContainer;
++import org.testcontainers.containers.Network;
++import org.testcontainers.utility.DockerImageName;
++import ru.javaops.cloudjava.OrderDispatchStatus;
++import ru.javaops.cloudjava.OrderDispatchedEvent;
++import ru.javaops.cloudjava.ordersservice.BaseTest;
++import ru.javaops.cloudjava.ordersservice.SchemaRegistryContainer;
++import ru.javaops.cloudjava.ordersservice.storage.model.MenuOrder;
++import ru.javaops.cloudjava.ordersservice.storage.model.OrderStatus;
++import ru.javaops.cloudjava.ordersservice.storage.repositories.MenuOrderRepository;
++
++import java.time.Duration;
++
++import static org.assertj.core.api.AssertionsForInterfaceTypes.assertThat;
++
++@SpringBootTest
++class KafkaOrderDispatchListenerTest extends BaseTest {
++
++    public static final String CONFLUENT_VERSION = "7.5.2";
++
++    private static final String ORDER_DISPATCH_TOPIC = "v1.orders_dispatch";
++
++    private static final Network NETWORK = Network.newNetwork();
++
++    public static final KafkaContainer KAFKA = new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.5.2"))
++            .withKraft()
++            .withNetwork(NETWORK);
++
++    public static final SchemaRegistryContainer SCHEMA_REGISTRY =
++            new SchemaRegistryContainer(CONFLUENT_VERSION);
++
++    @BeforeAll
++    static void setup() {
++        KAFKA.start();
++        SCHEMA_REGISTRY.withKafka(KAFKA).start();
++
++        System.setProperty("spring.kafka.bootstrap-servers", KAFKA.getBootstrapServers());
++        System.setProperty("spring.kafka.consumer.properties.schema.registry.url", "http://localhost:" + SCHEMA_REGISTRY.getFirstMappedPort());
++        System.setProperty("spring.kafka.producer.key-serializer", "org.apache.kafka.common.serialization.StringSerializer");
++        System.setProperty("spring.kafka.producer.value-serializer", "io.confluent.kafka.serializers.KafkaAvroSerializer");
++        System.setProperty("spring.kafka.producer.properties.schema.registry.url", "http://localhost:" + SCHEMA_REGISTRY.getFirstMappedPort());
++    }
++
++    @Autowired
++    private KafkaTemplate<String, OrderDispatchedEvent> kafkaTemplate;
++
++    @Autowired
++    private MenuOrderRepository menuOrderRepository;
++
++    @Test
++    void consumeOrderDispatchEvent_consumesEventAndUpdatesMenuOrderStatus() throws Exception {
++        MenuOrder order = menuOrderRepository.findAll().blockFirst();
++        assertThat(order.getStatus()).isEqualTo(OrderStatus.NEW);
++
++        OrderDispatchedEvent event = OrderDispatchedEvent.newBuilder()
++                .setOrderId(order.getId())
++                .setStatus(OrderDispatchStatus.ACCEPTED)
++                .build();
++        kafkaTemplate.send(ORDER_DISPATCH_TOPIC, String.valueOf(order.getId()), event).get();
++
++        Awaitility
++                .await()
++                .atMost(Duration.ofSeconds(5))
++                .untilAsserted(() -> {
++                    MenuOrder updated = menuOrderRepository.findById(order.getId()).block();
++                    assertThat(updated.getStatus()).isEqualTo(OrderStatus.ACCEPTED);
++                });
++    }
++}
+\ No newline at end of file
+Index: src/test/java/ru/javaops/cloudjava/ordersservice/SchemaRegistryContainer.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/cloudjava/ordersservice/SchemaRegistryContainer.java b/src/test/java/ru/javaops/cloudjava/ordersservice/SchemaRegistryContainer.java
+new file mode 100644
+--- /dev/null	(date 1731250882889)
++++ b/src/test/java/ru/javaops/cloudjava/ordersservice/SchemaRegistryContainer.java	(date 1731250882889)
+@@ -0,0 +1,29 @@
++package ru.javaops.cloudjava.ordersservice;
++
++import org.testcontainers.containers.GenericContainer;
++import org.testcontainers.containers.KafkaContainer;
++import org.testcontainers.containers.Network;
++import org.testcontainers.containers.wait.strategy.Wait;
++
++public class SchemaRegistryContainer extends GenericContainer<SchemaRegistryContainer> {
++    public static final String SCHEMA_REGISTRY_IMAGE = "confluentinc/cp-schema-registry";
++    public static final int SCHEMA_REGISTRY_PORT = 8081;
++
++    public SchemaRegistryContainer(String version) {
++        super(SCHEMA_REGISTRY_IMAGE + ":" + version);
++        waitingFor(Wait.forHttp("/subjects").forStatusCode(200));
++        withExposedPorts(SCHEMA_REGISTRY_PORT);
++    }
++
++    public SchemaRegistryContainer withKafka(KafkaContainer kafka) {
++        return withKafka(kafka.getNetwork(), kafka.getNetworkAliases().get(0) + ":9092");
++    }
++
++    public SchemaRegistryContainer withKafka(Network network, String bootstrapServers) {
++        withNetwork(network);
++        withEnv("SCHEMA_REGISTRY_HOST_NAME", "schema-registry");
++        withEnv("SCHEMA_REGISTRY_LISTENERS", "http://0.0.0.0:8081");
++        withEnv("SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS", "PLAINTEXT://" + bootstrapServers);
++        return self();
++    }
++}
