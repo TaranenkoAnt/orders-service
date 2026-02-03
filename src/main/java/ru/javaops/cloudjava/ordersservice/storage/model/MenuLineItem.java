@@ -1,4 +1,3 @@
-
 package ru.javaops.cloudjava.ordersservice.storage.model;
 
 import lombok.AllArgsConstructor;
